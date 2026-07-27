@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import ORJSONResponse
+from fastapi.responses import JSONResponse
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
@@ -112,14 +112,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
+    # Docs live under /api/* so host Nginx `location /api` proxies match production URLs
+    # such as https://fintech.terabitventure.com/api/docs without path rewriting.
     app = FastAPI(
         title=settings.app_name,
         version=settings.app_version,
         description=(
             "Cached historical and live financial market data. "
-            "WebSocket documentation is available on port 8080 when using Docker Compose."
+            "Swagger is at /api/docs; live WebSocket AsyncAPI docs are served separately."
         ),
-        default_response_class=ORJSONResponse,
+        docs_url="/api/docs",
+        redoc_url="/api/redoc",
+        openapi_url="/api/openapi.json",
         lifespan=lifespan,
     )
     app.state.settings = settings
@@ -133,7 +137,8 @@ def create_app() -> FastAPI:
 
     @app.middleware("http")
     async def public_rate_limit(request: Request, call_next):  # type: ignore[no-untyped-def]
-        if request.url.path.startswith(("/health", "/docs", "/redoc", "/openapi.json")):
+        path = request.url.path
+        if path.startswith(("/health", "/api/docs", "/api/redoc", "/api/openapi.json")):
             return await call_next(request)
         redis: Redis = request.app.state.redis
         limiter = RedisTokenBucket(redis)
@@ -142,7 +147,7 @@ def create_app() -> FastAPI:
             f"ratelimit:client:{client_ip}",
             settings.frontend_rate_limit_per_minute,
         ):
-            return ORJSONResponse(
+            return JSONResponse(
                 status_code=429,
                 content={"detail": "Request rate limit exceeded", "code": "rate_limited"},
                 headers={"Retry-After": "60"},
@@ -150,14 +155,14 @@ def create_app() -> FastAPI:
         return await call_next(request)
 
     @app.exception_handler(FinnhubError)
-    async def finnhub_error_handler(_request: Request, exc: FinnhubError) -> ORJSONResponse:
+    async def finnhub_error_handler(_request: Request, exc: FinnhubError) -> JSONResponse:
         if isinstance(exc, FinnhubRateLimitError):
             status = 429
         elif isinstance(exc, FinnhubEntitlementError):
             status = 403
         else:
             status = 503
-        return ORJSONResponse(
+        return JSONResponse(
             status_code=status,
             content={"detail": str(exc), "code": exc.code},
             headers={"Retry-After": "60"} if status == 429 else None,

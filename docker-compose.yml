@@ -56,8 +56,9 @@ services:
 
   asyncapi-docs:
     image: nginx:1.27-alpine
+    # Bind to localhost only; expose via host Nginx if needed (public :8080 attracts scanners).
     ports:
-      - "8080:80"
+      - "127.0.0.1:8080:80"
     volumes:
       - ./docs:/usr/share/nginx/html:ro
     networks: [financial_net]

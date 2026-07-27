@@ -3,7 +3,7 @@ from datetime import UTC, date, datetime
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Query, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import ORJSONResponse
+from fastapi.responses import JSONResponse
 from pydantic import StringConstraints
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
@@ -67,11 +67,11 @@ async def historical(
     try:
         return await _historical_service(request).get(ticker, period, interval)
     except HistoricalDataNotFoundError as exc:
-        return ORJSONResponse(  # type: ignore[return-value]
+        return JSONResponse(  # type: ignore[return-value]
             status_code=404, content={"detail": str(exc), "code": "historical_not_found"}
         )
     except HistoricalProviderError as exc:
-        return ORJSONResponse(  # type: ignore[return-value]
+        return JSONResponse(  # type: ignore[return-value]
             status_code=503,
             content={"detail": str(exc), "code": "historical_provider_unavailable"},
         )
@@ -202,7 +202,7 @@ async def liveness() -> dict[str, str]:
 
 
 @router.get("/health/ready", tags=["health"])
-async def readiness(request: Request) -> ORJSONResponse:
+async def readiness(request: Request) -> JSONResponse:
     checks = {"redis": False, "postgres": False}
     try:
         checks["redis"] = bool(await request.app.state.redis.ping())
@@ -215,7 +215,7 @@ async def readiness(request: Request) -> ORJSONResponse:
     except SQLAlchemyError:
         pass
     healthy = all(checks.values())
-    return ORJSONResponse(
+    return JSONResponse(
         status_code=200 if healthy else 503,
         content={"status": "ok" if healthy else "degraded", "checks": checks},
     )

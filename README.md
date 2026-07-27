@@ -18,10 +18,24 @@ Uvicorn worker. One worker is intentional: a process starts one Finnhub WebSocke
 the free plan permits a limited number of upstream subscriptions.
 
 - REST API: <http://localhost:8000>
-- Swagger UI: <http://localhost:8000/docs>
-- ReDoc: <http://localhost:8000/redoc>
-- WebSocket AsyncAPI docs: <http://localhost:8080>
+- Swagger UI: <http://localhost:8000/api/docs>
+- ReDoc: <http://localhost:8000/api/redoc>
+- OpenAPI JSON: <http://localhost:8000/api/openapi.json>
+- WebSocket AsyncAPI docs: <http://127.0.0.1:8080>
 - Readiness: <http://localhost:8000/health/ready>
+
+### Production Nginx note
+
+If the host proxies only `location /api` and `location /ws` (as on
+`fintech.terabitventure.com`), use:
+
+- Swagger: `https://fintech.terabitventure.com/api/docs`
+- ReDoc: `https://fintech.terabitventure.com/api/redoc`
+- Live WebSocket: `wss://fintech.terabitventure.com/ws/live`
+- Example REST: `https://fintech.terabitventure.com/api/v1/quotes/AAPL`
+
+Do not bind AsyncAPI `:8080` to `0.0.0.0` on a public VPS; scanners will hit it.
+Keep it on `127.0.0.1` and optionally proxy it through Nginx.
 
 The checked-in `.env.example` is safe to copy. `.env` is ignored and contains local
 Compose values. Rotate any API key that has been pasted into chat or logs before
