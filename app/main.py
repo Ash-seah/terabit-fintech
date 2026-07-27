@@ -13,6 +13,7 @@ from redis.exceptions import RedisError
 from app.api.router import router
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
+from app.core.symbols import curated_stream_symbols
 from app.db.session import Database
 from app.providers.finnhub import (
     FinnhubClient,
@@ -25,6 +26,7 @@ from app.schemas import Trade
 from app.services.cache import Cache, RedisTokenBucket
 from app.services.historical import HistoricalService
 from app.services.market import MarketDataService
+from app.services.overview import OverviewService
 from app.services.streaming import (
     ConnectionManager,
     FinnhubStreamer,
@@ -66,16 +68,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         finnhub,
         config.finnhub_rest_calls_per_minute,
     )
+    app.state.overview_service = OverviewService(
+        cache,
+        app.state.market_service,
+        database.session_factory,
+    )
 
     try:
         await redis.ping()
     except RedisError:
         logger.exception("Redis unavailable during startup; degraded mode enabled")
 
+    stream_symbols = config.configured_stream_symbols or curated_stream_symbols()
     streamer = FinnhubStreamer(
         config.finnhub_ws_url,
         config.finnhub_api_key.get_secret_value(),
-        config.configured_stream_symbols,
+        stream_symbols,
         redis,
         cache,
         trade_queue,
@@ -119,7 +127,7 @@ def create_app() -> FastAPI:
         version=settings.app_version,
         description=(
             "Cached historical and live financial market data. "
-            "Swagger is at /api/docs; live WebSocket AsyncAPI docs are served separately."
+            "Swagger: /api/docs. Interactive WebSocket tester: /api/ws-tester."
         ),
         docs_url="/api/docs",
         redoc_url="/api/redoc",
@@ -138,7 +146,9 @@ def create_app() -> FastAPI:
     @app.middleware("http")
     async def public_rate_limit(request: Request, call_next):  # type: ignore[no-untyped-def]
         path = request.url.path
-        if path.startswith(("/health", "/api/docs", "/api/redoc", "/api/openapi.json")):
+        if path.startswith(
+            ("/health", "/api/docs", "/api/redoc", "/api/openapi.json", "/api/ws-tester")
+        ):
             return await call_next(request)
         redis: Redis = request.app.state.redis
         limiter = RedisTokenBucket(redis)

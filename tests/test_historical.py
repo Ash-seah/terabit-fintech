@@ -45,7 +45,6 @@ async def test_historical_cache_hit_skips_provider() -> None:
         "symbol": "AAPL",
         "interval": "1d",
         "period": "1mo",
-        "source": "database",
         "cached": False,
         "points": [point().model_dump(mode="json")],
     }
@@ -70,4 +69,4 @@ async def test_historical_cache_hit_skips_provider() -> None:
     )
     response = await service.get("AAPL", "1mo", "1d")
     assert response.cached is True
-    assert response.source == "database"
+    assert response.symbol == "AAPL"

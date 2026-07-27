@@ -38,37 +38,41 @@ class FinnhubClient:
                 response = await self.client.get(path, params=params)
             except (httpx.TimeoutException, httpx.NetworkError) as exc:
                 if attempt == 2:
-                    raise FinnhubUnavailableError("Finnhub is unreachable") from exc
+                    raise FinnhubUnavailableError(
+                        "Upstream market data is temporarily unreachable"
+                    ) from exc
                 await asyncio.sleep(0.5 * (2**attempt))
                 continue
 
             if response.status_code == 429:
-                raise FinnhubRateLimitError("Finnhub request quota is exhausted")
+                raise FinnhubRateLimitError("Request quota is temporarily exhausted")
             if response.status_code in {401, 403}:
                 raise FinnhubEntitlementError(
-                    "This Finnhub account is not entitled to this dataset"
+                    "This dataset is not available on the current plan"
                 )
             if response.status_code >= 500:
                 if attempt == 2:
-                    raise FinnhubUnavailableError("Finnhub returned a server error")
+                    raise FinnhubUnavailableError("Upstream market data is temporarily unavailable")
                 await asyncio.sleep(0.5 * (2**attempt))
                 continue
             try:
                 response.raise_for_status()
                 payload = response.json()
             except (httpx.HTTPStatusError, ValueError) as exc:
-                raise FinnhubUnavailableError("Finnhub returned an invalid response") from exc
+                raise FinnhubUnavailableError(
+                    "Upstream market data returned an invalid response"
+                ) from exc
             if isinstance(payload, dict) and payload.get("error"):
                 message = str(payload["error"])
                 if "access" in message.lower() or "premium" in message.lower():
                     raise FinnhubEntitlementError(
-                        "This Finnhub account is not entitled to this dataset"
+                        "This dataset is not available on the current plan"
                     )
-                raise FinnhubUnavailableError(message)
+                raise FinnhubUnavailableError("Upstream market data request failed")
             if not isinstance(payload, (dict, list)):
-                raise FinnhubUnavailableError("Finnhub returned an unexpected payload")
+                raise FinnhubUnavailableError("Upstream market data returned an unexpected payload")
             return payload
-        raise FinnhubUnavailableError("Finnhub request failed")
+        raise FinnhubUnavailableError("Upstream market data request failed")
 
     async def close(self) -> None:
         await self.client.aclose()

@@ -17,9 +17,50 @@ class HistoricalResponse(BaseModel):
     symbol: str
     interval: str
     period: str
-    source: str
     cached: bool = False
     points: list[HistoricalPoint]
+
+
+class TradingViewBar(BaseModel):
+    """TradingView Lightweight Charts candlestick bar."""
+
+    time: int = Field(description="Unix timestamp in seconds (UTC)")
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float = 0
+
+
+class TradingViewHistoryResponse(BaseModel):
+    symbol: str
+    interval: str
+    cached: bool = False
+    bars: list[TradingViewBar]
+
+
+class SymbolOverview(BaseModel):
+    symbol: str
+    name: str
+    asset_class: str
+    exchange: str | None = None
+    currency: str | None = None
+    country: str | None = None
+    industry: str | None = None
+    logo: str | None = None
+    weburl: str | None = None
+    price: float | None = None
+    previous_close: float | None = None
+    change: float | None = None
+    change_percent: float | None = None
+    high: float | None = None
+    low: float | None = None
+    open: float | None = None
+    timestamp: datetime | None = None
+
+
+class SymbolsOverviewResponse(BaseModel):
+    symbols: list[SymbolOverview]
 
 
 class Trade(BaseModel):
@@ -47,9 +88,5 @@ class ErrorResponse(BaseModel):
     code: str
 
 
-class ProviderResponse(BaseModel):
-    provider: Literal["finnhub"] = "finnhub"
-    resource: str
-    cached: bool = False
-    stale: bool = False
-    data: dict[str, Any] | list[Any]
+# Passthrough market payloads are returned unwrapped (dict or list).
+MarketPayload = dict[str, Any] | list[Any]

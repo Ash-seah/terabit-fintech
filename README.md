@@ -21,6 +21,7 @@ the free plan permits a limited number of upstream subscriptions.
 - Swagger UI: <http://localhost:8000/api/docs>
 - ReDoc: <http://localhost:8000/api/redoc>
 - OpenAPI JSON: <http://localhost:8000/api/openapi.json>
+- WebSocket tester (browser): <http://localhost:8000/api/ws-tester>
 - WebSocket AsyncAPI docs: <http://127.0.0.1:8080>
 - Readiness: <http://localhost:8000/health/ready>
 
@@ -31,8 +32,10 @@ If the host proxies only `location /api` and `location /ws` (as on
 
 - Swagger: `https://fintech.terabitventure.com/api/docs`
 - ReDoc: `https://fintech.terabitventure.com/api/redoc`
+- WebSocket tester: `https://fintech.terabitventure.com/api/ws-tester`
 - Live WebSocket: `wss://fintech.terabitventure.com/ws/live`
-- Example REST: `https://fintech.terabitventure.com/api/v1/quotes/AAPL`
+- Symbol overview: `https://fintech.terabitventure.com/api/v1/symbols`
+- TradingView OHLC: `https://fintech.terabitventure.com/api/v1/charts/AAPL`
 
 Do not bind AsyncAPI `:8080` to `0.0.0.0` on a public VPS; scanners will hit it.
 Keep it on `127.0.0.1` and optionally proxy it through Nginx.
@@ -43,32 +46,32 @@ deploying.
 
 ## REST endpoints
 
-- `GET /api/v1/historical/{ticker}?period=1mo&interval=1d`
+- `GET /api/v1/symbols` — curated overview (name, details, price, daily %)
+- `GET /api/v1/charts/{ticker}?interval=1d` — TradingView Lightweight Charts OHLC
+- `GET /api/v1/historical/{ticker}?interval=1d` — same bars as structured points (defaults to deepest available history)
 - `GET /api/v1/quotes/{symbol}`
 - `GET /api/v1/symbols/search?q=Apple`
-- `GET /api/v1/symbols/stocks/{exchange}`
-- `GET /api/v1/market/status/{exchange}`
+- `GET /api/v1/market/status` — US market (no exchange picker)
 - `GET /api/v1/companies/{symbol}/profile`
-- `GET /api/v1/companies/{symbol}/news?from_date=2026-07-01&to_date=2026-07-27`
+- `GET /api/v1/companies/{symbol}/news`
 - `GET /api/v1/companies/{symbol}/peers`
 - `GET /api/v1/companies/{symbol}/fundamentals`
 - `GET /api/v1/companies/{symbol}/earnings`
 - `GET /api/v1/companies/{symbol}/recommendations`
-- `GET /api/v1/calendars/earnings?from_date=2026-07-01&to_date=2026-07-31`
-- `GET /api/v1/forex/exchanges`
-- `GET /api/v1/forex/symbols/{exchange}`
-- `GET /api/v1/crypto/exchanges`
-- `GET /api/v1/crypto/symbols/{exchange}`
+- `GET /api/v1/calendars/earnings` — defaults to the next 30 days
+- `GET /api/v1/forex/symbols` — OANDA symbols (server-chosen)
+- `GET /api/v1/crypto/symbols` — Binance symbols (server-chosen)
 
-Every Finnhub response says whether it came from cache or stale PostgreSQL fallback.
-Provider entitlement failures are returned as `403`; local/upstream quota exhaustion
-as `429`; provider outages as `503`.
+Market payloads are returned unwrapped (no provider/resource envelope). Entitlement
+failures are `403`; quota exhaustion `429`; upstream outages `503`.
 
 Historical requests check Redis, then sufficiently fresh PostgreSQL bars, and finally
 run the synchronous yfinance request in a worker thread. New bars are upserted into
-PostgreSQL and cached for 15 minutes.
+PostgreSQL and cached for 15 minutes. Daily charts default to `max` history.
 
 ## WebSocket
+
+Open the interactive tester at `/api/ws-tester` (works behind your Nginx `/api` proxy).
 
 Connect to all configured symbols:
 
@@ -84,7 +87,8 @@ ws://localhost:8000/ws/live?symbols=AAPL,BINANCE:BTCUSDT
 
 The server sends `trade` batches and a heartbeat after 30 seconds without client
 traffic. Slow clients have bounded queues and are disconnected instead of delaying
-the broadcast loop. Configure up to the provider allowance with `STREAM_SYMBOLS`.
+the broadcast loop. Configure up to the provider allowance with `STREAM_SYMBOLS`
+(defaults to the curated overview universe).
 
 ## Storage and caching
 

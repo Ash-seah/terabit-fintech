@@ -14,7 +14,7 @@ from app.providers.finnhub import (
     FinnhubError,
     FinnhubRateLimitError,
 )
-from app.schemas import ProviderResponse
+from app.schemas import MarketPayload
 from app.services.cache import Cache, RedisTokenBucket
 
 logger = logging.getLogger(__name__)
@@ -41,27 +41,27 @@ class MarketDataService:
         path: str,
         params: dict[str, Any],
         ttl: int,
-    ) -> ProviderResponse:
+    ) -> MarketPayload:
         canonical = json.dumps(params, sort_keys=True, default=str, separators=(",", ":"))
         digest = hashlib.sha256(f"{path}:{canonical}".encode()).hexdigest()
         key = f"finnhub:{resource}:{digest}"
         entitlement_key = f"{key}:entitlement"
         if await self.cache.get_json(entitlement_key) is not None:
-            raise FinnhubEntitlementError("This Finnhub account is not entitled to this dataset")
+            raise FinnhubEntitlementError("This dataset is not available on the current plan")
         cached = await self.cache.get_json(key)
-        if cached is not None:
-            return ProviderResponse(resource=resource, cached=True, data=cached)
+        if isinstance(cached, (dict, list)):
+            return cached
 
         async with self.cache.lock(key):
             cached = await self.cache.get_json(key)
-            if cached is not None:
-                return ProviderResponse(resource=resource, cached=True, data=cached)
+            if isinstance(cached, (dict, list)):
+                return cached
 
             if not await self.limiter.allow("ratelimit:finnhub:rest", self.quota_per_minute):
                 stale = await self._snapshot(key)
                 if stale is not None:
-                    return ProviderResponse(resource=resource, stale=True, data=stale)
-                raise FinnhubRateLimitError("Local Finnhub quota guard rejected the request")
+                    return stale
+                raise FinnhubRateLimitError("Request quota is temporarily exhausted")
 
             try:
                 payload = await self.client.get(path, params)
@@ -71,7 +71,7 @@ class MarketDataService:
             except FinnhubError:
                 stale = await self._snapshot(key)
                 if stale is not None:
-                    return ProviderResponse(resource=resource, stale=True, data=stale)
+                    return stale
                 raise
 
             await self.cache.set_json(key, payload, ttl)
@@ -85,9 +85,9 @@ class MarketDataService:
                     )
             except SQLAlchemyError:
                 logger.exception("Provider snapshot persistence failed")
-            return ProviderResponse(resource=resource, data=payload)
+            return payload
 
-    async def _snapshot(self, key: str) -> dict[str, Any] | list[Any] | None:
+    async def _snapshot(self, key: str) -> MarketPayload | None:
         try:
             async with self.sessions() as session:
                 snapshot = await get_snapshot(session, key, allow_expired=True)

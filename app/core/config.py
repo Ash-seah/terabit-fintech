@@ -21,7 +21,9 @@ class Settings(BaseSettings):
     finnhub_ws_url: str = "wss://ws.finnhub.io"
     redis_url: str
     database_url: str
-    stream_symbols: str = "AAPL,BINANCE:BTCUSDT"
+    stream_symbols: str = (
+        "AAPL,MSFT,GOOGL,AMZN,NVDA,META,TSLA,JPM,V,JNJ,BINANCE:BTCUSDT"
+    )
     cors_origins: str = "*"
     finnhub_rest_calls_per_minute: int = Field(default=55, ge=2, le=60)
     historical_cache_ttl_seconds: int = Field(default=900, ge=1)

@@ -11,6 +11,11 @@ servers:
     protocol: ws
     pathname: /ws/live
     description: Local Docker Compose API
+  production:
+    host: fintech.terabitventure.com
+    protocol: wss
+    pathname: /ws/live
+    description: Production Nginx-terminated API
 channels:
   live:
     address: /ws/live
