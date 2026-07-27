@@ -78,6 +78,25 @@ class TradeEvent(BaseModel):
     data: list[Trade]
 
 
+class QuoteTick(BaseModel):
+    symbol: str
+    price: float
+    previous_close: float | None = None
+    change: float | None = None
+    change_percent: float | None = None
+    timestamp: datetime
+
+
+class QuoteEvent(BaseModel):
+    type: Literal["quote"] = "quote"
+    data: list[QuoteTick]
+
+
+class SubscribedEvent(BaseModel):
+    type: Literal["subscribed"] = "subscribed"
+    symbols: list[str]
+
+
 class HeartbeatEvent(BaseModel):
     type: Literal["heartbeat"] = "heartbeat"
     timestamp: datetime

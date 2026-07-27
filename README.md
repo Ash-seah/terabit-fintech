@@ -46,7 +46,7 @@ deploying.
 
 ## REST endpoints
 
-- `GET /api/v1/symbols` — curated overview (name, details, price, daily %)
+- `GET /api/v1/symbols` — full overview (equities, crypto, FX) with prices
 - `GET /api/v1/charts/{ticker}?interval=1d` — TradingView Lightweight Charts OHLC
 - `GET /api/v1/historical/{ticker}?interval=1d` — same bars as structured points (defaults to deepest available history)
 - `GET /api/v1/quotes/{symbol}`
@@ -59,8 +59,10 @@ deploying.
 - `GET /api/v1/companies/{symbol}/earnings`
 - `GET /api/v1/companies/{symbol}/recommendations`
 - `GET /api/v1/calendars/earnings` — defaults to the next 30 days
-- `GET /api/v1/forex/symbols` — OANDA symbols (server-chosen)
-- `GET /api/v1/crypto/symbols` — Binance symbols (server-chosen)
+- `GET /api/v1/forex/symbols` — major FX pairs (`EUR-USD`, …)
+- `GET /api/v1/crypto/symbols` — major crypto (`BTC-USD`, …)
+
+`NVDA` and other equities are on `/api/v1/symbols`, not `/api/v1/forex/symbols`.
 
 Market payloads are returned unwrapped (no provider/resource envelope). Entitlement
 failures are `403`; quota exhaustion `429`; upstream outages `503`.
@@ -87,7 +89,7 @@ ws://localhost:8000/ws/live
 Or select a configured subset:
 
 ```text
-ws://localhost:8000/ws/live?symbols=AAPL,BINANCE:BTCUSDT
+ws://localhost:8000/ws/live?symbols=AAPL,NVDA,BTC-USD
 ```
 
 The server sends `trade` batches and a heartbeat after 30 seconds without client

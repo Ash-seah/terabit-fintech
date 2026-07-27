@@ -28,7 +28,7 @@ class OverviewService:
         self.ttl = ttl
 
     async def list_symbols(self) -> SymbolsOverviewResponse:
-        key = "overview:symbols:v2"
+        key = "overview:symbols:v3"
         cached = await self.cache.get_json(key)
         if cached is not None:
             # Overlay fresh WS prices without another upstream call.
@@ -43,7 +43,7 @@ class OverviewService:
             try:
                 quotes = await self.yahoo.quotes(tuple(item.symbol for item in CURATED_SYMBOLS))
             except HistoricalProviderError:
-                logger.warning("Yahoo overview quotes unavailable; using live cache only")
+                logger.warning("Overview quotes unavailable; using live cache only")
 
             symbols = [
                 self._build_card(spec, quotes.get(spec.symbol, {})) for spec in CURATED_SYMBOLS
@@ -94,7 +94,13 @@ class OverviewService:
             symbol=spec.symbol,
             name=spec.name,
             asset_class=spec.asset_class,
-            exchange="US" if spec.asset_class == "equity" else "BINANCE",
+            exchange=(
+                "US"
+                if spec.asset_class == "equity"
+                else "CRYPTO"
+                if spec.asset_class == "crypto"
+                else "FX"
+            ),
             currency="USD",
             country="US" if spec.asset_class == "equity" else None,
             industry=None,

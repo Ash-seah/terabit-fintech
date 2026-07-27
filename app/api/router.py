@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Any, Literal
 
@@ -8,13 +9,18 @@ from pydantic import StringConstraints
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.core.symbols import DEFAULT_CRYPTO_EXCHANGE, DEFAULT_STOCK_EXCHANGE
+from app.core.symbols import (
+    DEFAULT_STOCK_EXCHANGE,
+    normalize_symbol,
+    symbols_by_asset_class,
+)
 from app.providers.yahoo import HistoricalDataNotFoundError, HistoricalProviderError
 from app.schemas import (
     ErrorResponse,
     HeartbeatEvent,
     HistoricalResponse,
     MarketPayload,
+    SubscribedEvent,
     SymbolsOverviewResponse,
     TradingViewHistoryResponse,
 )
@@ -79,7 +85,7 @@ async def historical(
     interval: Interval = "1d",
 ) -> HistoricalResponse:
     try:
-        return await _historical_service(request).get(ticker, period, interval)
+        return await _historical_service(request).get(normalize_symbol(ticker), period, interval)
     except HistoricalDataNotFoundError as exc:
         return JSONResponse(  # type: ignore[return-value]
             status_code=404, content={"detail": str(exc), "code": "historical_not_found"}
@@ -104,7 +110,9 @@ async def tradingview_chart(
     interval: Interval = "1d",
 ) -> TradingViewHistoryResponse:
     try:
-        return await _historical_service(request).tradingview(ticker, interval, period)
+        return await _historical_service(request).tradingview(
+            normalize_symbol(ticker), interval, period
+        )
     except HistoricalDataNotFoundError as exc:
         return JSONResponse(  # type: ignore[return-value]
             status_code=404, content={"detail": str(exc), "code": "historical_not_found"}
@@ -119,7 +127,7 @@ async def tradingview_chart(
 @market_router.get(
     "/symbols",
     response_model=SymbolsOverviewResponse,
-    summary="Curated symbol overview with live quote fields",
+    summary="Full symbol overview (equities, crypto, FX)",
 )
 async def symbols_overview(request: Request) -> SymbolsOverviewResponse:
     return await _overview_service(request).list_symbols()
@@ -128,7 +136,7 @@ async def symbols_overview(request: Request) -> SymbolsOverviewResponse:
 @market_router.get("/quotes/{symbol}")
 async def quote(request: Request, symbol: Symbol) -> MarketPayload:
     try:
-        return await _quote_service(request).get(symbol)
+        return await _quote_service(request).get(normalize_symbol(symbol))
     except HistoricalProviderError as exc:
         return JSONResponse(  # type: ignore[return-value]
             status_code=503,
@@ -159,7 +167,13 @@ async def market_status(request: Request) -> MarketPayload:
 
 @market_router.get("/companies/{symbol}/profile")
 async def company_profile(request: Request, symbol: Symbol) -> MarketPayload:
-    return await _market(request, "company-profile", "/stock/profile2", {"symbol": symbol}, 604_800)
+    return await _market(
+        request,
+        "company-profile",
+        "/stock/profile2",
+        {"symbol": normalize_symbol(symbol)},
+        604_800,
+    )
 
 
 @market_router.get("/companies/{symbol}/news")
@@ -175,14 +189,24 @@ async def company_news(
         request,
         "company-news",
         "/company-news",
-        {"symbol": symbol, "from": start.isoformat(), "to": end.isoformat()},
+        {
+            "symbol": normalize_symbol(symbol),
+            "from": start.isoformat(),
+            "to": end.isoformat(),
+        },
         1_800,
     )
 
 
 @market_router.get("/companies/{symbol}/peers")
 async def company_peers(request: Request, symbol: Symbol) -> MarketPayload:
-    return await _market(request, "company-peers", "/stock/peers", {"symbol": symbol}, 604_800)
+    return await _market(
+        request,
+        "company-peers",
+        "/stock/peers",
+        {"symbol": normalize_symbol(symbol)},
+        604_800,
+    )
 
 
 @market_router.get("/companies/{symbol}/fundamentals")
@@ -193,7 +217,7 @@ async def company_fundamentals(
         request,
         "company-fundamentals",
         "/stock/metric",
-        {"symbol": symbol, "metric": metric},
+        {"symbol": normalize_symbol(symbol), "metric": metric},
         86_400,
     )
 
@@ -203,14 +227,22 @@ async def company_earnings(
     request: Request, symbol: Symbol, limit: Annotated[int, Query(ge=1, le=100)] = 4
 ) -> MarketPayload:
     return await _market(
-        request, "company-earnings", "/stock/earnings", {"symbol": symbol, "limit": limit}, 86_400
+        request,
+        "company-earnings",
+        "/stock/earnings",
+        {"symbol": normalize_symbol(symbol), "limit": limit},
+        86_400,
     )
 
 
 @market_router.get("/companies/{symbol}/recommendations")
 async def recommendations(request: Request, symbol: Symbol) -> MarketPayload:
     return await _market(
-        request, "recommendations", "/stock/recommendation", {"symbol": symbol}, 86_400
+        request,
+        "recommendations",
+        "/stock/recommendation",
+        {"symbol": normalize_symbol(symbol)},
+        86_400,
     )
 
 
@@ -231,7 +263,7 @@ async def earnings_calendar(
         {
             "from": start.isoformat(),
             "to": end.isoformat(),
-            "symbol": symbol,
+            "symbol": normalize_symbol(symbol) if symbol else None,
             "international": False,
         },
         3_600,
@@ -239,21 +271,29 @@ async def earnings_calendar(
 
 
 @market_router.get("/forex/symbols")
-async def forex_symbols(request: Request) -> MarketPayload:
-    return await _market(
-        request, "forex-symbols", "/forex/symbol", {"exchange": "oanda"}, 604_800
-    )
+async def forex_symbols() -> list[dict[str, str]]:
+    return [
+        {
+            "symbol": item.symbol,
+            "name": item.name,
+            "display_symbol": item.symbol.replace("-", "/"),
+            "asset_class": item.asset_class,
+        }
+        for item in symbols_by_asset_class("forex")
+    ]
 
 
 @market_router.get("/crypto/symbols")
-async def crypto_symbols(request: Request) -> MarketPayload:
-    return await _market(
-        request,
-        "crypto-symbols",
-        "/crypto/symbol",
-        {"exchange": DEFAULT_CRYPTO_EXCHANGE},
-        604_800,
-    )
+async def crypto_symbols() -> list[dict[str, str]]:
+    return [
+        {
+            "symbol": item.symbol,
+            "name": item.name,
+            "display_symbol": item.symbol,
+            "asset_class": item.asset_class,
+        }
+        for item in symbols_by_asset_class("crypto")
+    ]
 
 
 @router.get("/health/live", tags=["health"])
@@ -297,20 +337,32 @@ async def live(websocket: WebSocket, symbols: str = "") -> None:
         getattr(websocket.app.state, "stream_symbols", None)
         or websocket.app.state.settings.configured_stream_symbols
     )
-    requested = frozenset(symbol.strip().upper() for symbol in symbols.split(",") if symbol.strip())
+    requested = frozenset(
+        normalize_symbol(symbol) for symbol in symbols.split(",") if symbol.strip()
+    )
+    await websocket.accept()
     if requested and not requested.issubset(configured):
-        await websocket.close(code=1008, reason="Only configured stream symbols are available")
+        await websocket.send_text(
+            '{"type":"error","detail":"Unknown symbol filter","code":"invalid_symbols"}'
+        )
+        await websocket.close(code=1008, reason="Unknown symbol filter")
         return
     manager: ConnectionManager = websocket.app.state.connection_manager
-    connection = await manager.connect(websocket, requested)
+    # accept() already called; connect() also accepts — need to fix ConnectionManager
+    connection = await manager.connect(websocket, requested, already_accepted=True)
+    active_symbols = sorted(requested) if requested else sorted(configured)
     try:
+        connection.queue.put_nowait(
+            SubscribedEvent(symbols=active_symbols).model_dump(mode="json")
+        )
         while True:
             try:
                 await asyncio.wait_for(websocket.receive_text(), timeout=30)
             except TimeoutError:
-                connection.queue.put_nowait(
-                    HeartbeatEvent(timestamp=datetime.now(UTC)).model_dump(mode="json")
-                )
+                with contextlib.suppress(asyncio.QueueFull):
+                    connection.queue.put_nowait(
+                        HeartbeatEvent(timestamp=datetime.now(UTC)).model_dump(mode="json")
+                    )
     except (WebSocketDisconnect, RuntimeError, asyncio.QueueFull):
         pass
     finally:
@@ -354,8 +406,10 @@ _WS_TESTER_HTML = """<!doctype html>
   <main>
     <h1>Live WebSocket Tester</h1>
     <p>
-      Connects to <code>/ws/live</code>. Leave symbols empty for all curated streams,
-      or pass a comma-separated subset (example: <code>AAPL,BINANCE:BTCUSDT</code>).
+      Connects to <code>/ws/live</code>. Leave symbols empty for all curated streams
+      (equities like <code>NVDA</code>, crypto like <code>BTC-USD</code>, FX like
+      <code>EUR-USD</code>). Stocks live under
+      <code>/api/v1/symbols</code>, not forex.
     </p>
     <div class="row">
       <input id="symbols" placeholder="leave empty for all curated symbols" value="" />

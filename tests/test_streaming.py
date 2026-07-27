@@ -20,6 +20,9 @@ class FakeWebSocket:
     async def send_json(self, payload: dict[str, Any]) -> None:
         self.sent.append(payload)
 
+    async def send_text(self, payload: str) -> None:
+        self.sent.append(json.loads(payload))
+
     async def close(self) -> None:
         self.client_state = WebSocketState.DISCONNECTED
 
@@ -30,7 +33,7 @@ async def test_connection_manager_filters_symbols() -> None:
     aapl_socket = FakeWebSocket()
     btc_socket = FakeWebSocket()
     aapl = await manager.connect(aapl_socket, frozenset({"AAPL"}))  # type: ignore[arg-type]
-    btc = await manager.connect(btc_socket, frozenset({"BINANCE:BTCUSDT"}))  # type: ignore[arg-type]
+    btc = await manager.connect(btc_socket, frozenset({"BTC-USD"}))  # type: ignore[arg-type]
 
     await manager.broadcast({"type": "trade", "data": [{"symbol": "AAPL"}]})
     await asyncio.sleep(0)

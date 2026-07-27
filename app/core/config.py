@@ -3,7 +3,7 @@ from functools import lru_cache
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from app.core.symbols import curated_stream_symbols
+from app.core.symbols import curated_stream_symbols, normalize_symbol
 
 
 class Settings(BaseSettings):
@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     historical_cache_ttl_seconds: int = Field(default=3_600, ge=1)
     overview_cache_ttl_seconds: int = Field(default=180, ge=30)
     quote_cache_ttl_seconds: int = Field(default=120, ge=30)
+    quote_pulse_seconds: float = Field(default=30.0, ge=15.0)
     raw_trade_retention_days: int = Field(default=30, ge=1)
     frontend_rate_limit_per_minute: int = Field(default=120, ge=2)
     trade_batch_size: int = Field(default=500, ge=1)
@@ -38,11 +39,10 @@ class Settings(BaseSettings):
     @property
     def configured_stream_symbols(self) -> tuple[str, ...]:
         extras = {
-            symbol.strip().upper()
+            normalize_symbol(symbol)
             for symbol in self.stream_symbols.split(",")
             if symbol.strip()
         }
-        # Always stream the full curated overview set so WS matches /api/v1/symbols.
         merged = list(dict.fromkeys((*curated_stream_symbols(), *sorted(extras))))
         return tuple(merged)
 

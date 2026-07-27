@@ -31,6 +31,7 @@ from app.services.streaming import (
     ConnectionManager,
     FinnhubStreamer,
     RedisTradeSubscriber,
+    quote_pulse_worker,
     retention_worker,
     trade_persistence_worker,
 )
@@ -105,6 +106,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         asyncio.create_task(streamer.run(), name="finnhub-streamer"),
         asyncio.create_task(
             RedisTradeSubscriber(redis, manager).run(), name="redis-trade-subscriber"
+        ),
+        asyncio.create_task(
+            quote_pulse_worker(
+                stream_symbols,
+                yahoo,
+                cache,
+                redis,
+                interval_seconds=config.quote_pulse_seconds,
+            ),
+            name="quote-pulse",
         ),
         asyncio.create_task(
             trade_persistence_worker(
