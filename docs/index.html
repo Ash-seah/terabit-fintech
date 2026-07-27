@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Financial Data WebSocket API</title>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/@asyncapi/react-component@latest/styles/default.min.css"
+    />
+    <style>
+      body { margin: 0; font-family: system-ui, sans-serif; }
+      #asyncapi { min-height: 100vh; }
+    </style>
+  </head>
+  <body>
+    <div id="asyncapi"></div>
+    <script src="https://unpkg.com/@asyncapi/react-component@latest/browser/standalone/index.js"></script>
+    <script>
+      AsyncApiStandalone.render(
+        { schema: { url: "./asyncapi.yaml" }, config: { show: { sidebar: true } } },
+        document.getElementById("asyncapi")
+      );
+    </script>
+  </body>
+</html>

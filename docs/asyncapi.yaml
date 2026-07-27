@@ -1,0 +1,85 @@
+asyncapi: 3.0.0
+info:
+  title: Financial Data Live API
+  version: 0.1.0
+  description: |
+    Multiplexed real-time trades from the configured Finnhub symbol set.
+    Connect with an optional comma-separated `symbols` query parameter.
+servers:
+  local:
+    host: localhost:8000
+    protocol: ws
+    pathname: /ws/live
+    description: Local Docker Compose API
+channels:
+  live:
+    address: /ws/live
+    parameters:
+      symbols:
+        description: Optional comma-separated subset of configured symbols.
+    messages:
+      trade:
+        $ref: '#/components/messages/TradeEvent'
+      heartbeat:
+        $ref: '#/components/messages/HeartbeatEvent'
+operations:
+  receiveLiveEvents:
+    action: receive
+    channel:
+      $ref: '#/channels/live'
+    summary: Receive normalized trade and heartbeat events
+    messages:
+      - $ref: '#/channels/live/messages/trade'
+      - $ref: '#/channels/live/messages/heartbeat'
+components:
+  messages:
+    TradeEvent:
+      name: trade
+      title: Trade batch
+      payload:
+        $ref: '#/components/schemas/TradeEvent'
+    HeartbeatEvent:
+      name: heartbeat
+      title: Connection heartbeat
+      payload:
+        $ref: '#/components/schemas/HeartbeatEvent'
+  schemas:
+    TradeEvent:
+      type: object
+      required: [type, data]
+      properties:
+        type:
+          const: trade
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Trade'
+    Trade:
+      type: object
+      required: [symbol, price, volume, timestamp, conditions]
+      properties:
+        symbol:
+          type: string
+          examples: [AAPL]
+        price:
+          type: number
+          examples: [229.42]
+        volume:
+          type: number
+          examples: [100]
+        timestamp:
+          type: string
+          format: date-time
+        conditions:
+          type: array
+          items:
+            type: string
+    HeartbeatEvent:
+      type: object
+      required: [type, timestamp]
+      properties:
+        type:
+          const: heartbeat
+        timestamp:
+          type: string
+          format: date-time
