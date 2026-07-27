@@ -13,7 +13,6 @@ from redis.exceptions import RedisError
 from app.api.router import router
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
-from app.core.symbols import curated_stream_symbols
 from app.db.session import Database
 from app.providers.finnhub import (
     FinnhubClient,
@@ -27,6 +26,7 @@ from app.services.cache import Cache, RedisTokenBucket
 from app.services.historical import HistoricalService
 from app.services.market import MarketDataService
 from app.services.overview import OverviewService
+from app.services.quotes import QuoteService
 from app.services.streaming import (
     ConnectionManager,
     FinnhubStreamer,
@@ -51,6 +51,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     manager = ConnectionManager()
     trade_queue: asyncio.Queue[Trade] = asyncio.Queue(maxsize=10_000)
 
+    yahoo = YahooFinanceProvider()
     app.state.redis = redis
     app.state.database = database
     app.state.cache = cache
@@ -58,7 +59,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.historical_service = HistoricalService(
         cache,
         database.session_factory,
-        YahooFinanceProvider(),
+        yahoo,
         config.historical_cache_ttl_seconds,
     )
     app.state.market_service = MarketDataService(
@@ -70,8 +71,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     app.state.overview_service = OverviewService(
         cache,
-        app.state.market_service,
+        yahoo,
         database.session_factory,
+        ttl=config.overview_cache_ttl_seconds,
+    )
+    app.state.quote_service = QuoteService(
+        cache,
+        yahoo,
+        ttl=config.quote_cache_ttl_seconds,
     )
 
     try:
@@ -79,7 +86,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     except RedisError:
         logger.exception("Redis unavailable during startup; degraded mode enabled")
 
-    stream_symbols = config.configured_stream_symbols or curated_stream_symbols()
+    stream_symbols = config.configured_stream_symbols
+    logger.info(
+        "Subscribing live stream to %d symbols: %s",
+        len(stream_symbols),
+        ",".join(stream_symbols),
+    )
+    app.state.stream_symbols = stream_symbols
     streamer = FinnhubStreamer(
         config.finnhub_ws_url,
         config.finnhub_api_key.get_secret_value(),

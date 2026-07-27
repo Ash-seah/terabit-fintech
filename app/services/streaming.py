@@ -108,7 +108,10 @@ class FinnhubStreamer:
                 ) as websocket:
                     for symbol in self.symbols:
                         await websocket.send(json.dumps({"type": "subscribe", "symbol": symbol}))
-                    logger.info("Finnhub WebSocket connected")
+                    logger.info(
+                        "Finnhub WebSocket connected; subscribed to %d symbols",
+                        len(self.symbols),
+                    )
                     attempt = 0
                     while True:
                         raw = await asyncio.wait_for(websocket.recv(), timeout=60)

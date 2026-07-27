@@ -21,6 +21,7 @@ from app.schemas import (
 from app.services.historical import HistoricalService
 from app.services.market import MarketDataService
 from app.services.overview import OverviewService
+from app.services.quotes import QuoteService
 from app.services.streaming import ConnectionManager
 
 router = APIRouter()
@@ -47,6 +48,10 @@ def _market_service(request: Request) -> MarketDataService:
 
 def _overview_service(request: Request) -> OverviewService:
     return request.app.state.overview_service  # type: ignore[no-any-return]
+
+
+def _quote_service(request: Request) -> QuoteService:
+    return request.app.state.quote_service  # type: ignore[no-any-return]
 
 
 async def _market(
@@ -122,7 +127,13 @@ async def symbols_overview(request: Request) -> SymbolsOverviewResponse:
 
 @market_router.get("/quotes/{symbol}")
 async def quote(request: Request, symbol: Symbol) -> MarketPayload:
-    return await _market(request, "quote", "/quote", {"symbol": symbol}, 5)
+    try:
+        return await _quote_service(request).get(symbol)
+    except HistoricalProviderError as exc:
+        return JSONResponse(  # type: ignore[return-value]
+            status_code=503,
+            content={"detail": str(exc), "code": "quote_unavailable"},
+        )
 
 
 @market_router.get("/symbols/search")
@@ -131,7 +142,7 @@ async def symbol_search(
     q: Annotated[str, Query(min_length=1, max_length=100)],
 ) -> MarketPayload:
     return await _market(
-        request, "symbol-search", "/search", {"q": q, "exchange": DEFAULT_STOCK_EXCHANGE}, 3600
+        request, "symbol-search", "/search", {"q": q, "exchange": DEFAULT_STOCK_EXCHANGE}, 86_400
     )
 
 
@@ -142,13 +153,13 @@ async def market_status(request: Request) -> MarketPayload:
         "market-status",
         "/stock/market-status",
         {"exchange": DEFAULT_STOCK_EXCHANGE},
-        60,
+        300,
     )
 
 
 @market_router.get("/companies/{symbol}/profile")
 async def company_profile(request: Request, symbol: Symbol) -> MarketPayload:
-    return await _market(request, "company-profile", "/stock/profile2", {"symbol": symbol}, 86400)
+    return await _market(request, "company-profile", "/stock/profile2", {"symbol": symbol}, 604_800)
 
 
 @market_router.get("/companies/{symbol}/news")
@@ -165,13 +176,13 @@ async def company_news(
         "company-news",
         "/company-news",
         {"symbol": symbol, "from": start.isoformat(), "to": end.isoformat()},
-        300,
+        1_800,
     )
 
 
 @market_router.get("/companies/{symbol}/peers")
 async def company_peers(request: Request, symbol: Symbol) -> MarketPayload:
-    return await _market(request, "company-peers", "/stock/peers", {"symbol": symbol}, 86400)
+    return await _market(request, "company-peers", "/stock/peers", {"symbol": symbol}, 604_800)
 
 
 @market_router.get("/companies/{symbol}/fundamentals")
@@ -183,7 +194,7 @@ async def company_fundamentals(
         "company-fundamentals",
         "/stock/metric",
         {"symbol": symbol, "metric": metric},
-        21600,
+        86_400,
     )
 
 
@@ -192,14 +203,14 @@ async def company_earnings(
     request: Request, symbol: Symbol, limit: Annotated[int, Query(ge=1, le=100)] = 4
 ) -> MarketPayload:
     return await _market(
-        request, "company-earnings", "/stock/earnings", {"symbol": symbol, "limit": limit}, 21600
+        request, "company-earnings", "/stock/earnings", {"symbol": symbol, "limit": limit}, 86_400
     )
 
 
 @market_router.get("/companies/{symbol}/recommendations")
 async def recommendations(request: Request, symbol: Symbol) -> MarketPayload:
     return await _market(
-        request, "recommendations", "/stock/recommendation", {"symbol": symbol}, 21600
+        request, "recommendations", "/stock/recommendation", {"symbol": symbol}, 86_400
     )
 
 
@@ -223,14 +234,14 @@ async def earnings_calendar(
             "symbol": symbol,
             "international": False,
         },
-        3600,
+        3_600,
     )
 
 
 @market_router.get("/forex/symbols")
 async def forex_symbols(request: Request) -> MarketPayload:
     return await _market(
-        request, "forex-symbols", "/forex/symbol", {"exchange": "oanda"}, 86400
+        request, "forex-symbols", "/forex/symbol", {"exchange": "oanda"}, 604_800
     )
 
 
@@ -241,7 +252,7 @@ async def crypto_symbols(request: Request) -> MarketPayload:
         "crypto-symbols",
         "/crypto/symbol",
         {"exchange": DEFAULT_CRYPTO_EXCHANGE},
-        86400,
+        604_800,
     )
 
 
@@ -282,7 +293,10 @@ async def websocket_tester() -> HTMLResponse:
 
 @router.websocket("/ws/live")
 async def live(websocket: WebSocket, symbols: str = "") -> None:
-    configured = frozenset(websocket.app.state.settings.configured_stream_symbols)
+    configured = frozenset(
+        getattr(websocket.app.state, "stream_symbols", None)
+        or websocket.app.state.settings.configured_stream_symbols
+    )
     requested = frozenset(symbol.strip().upper() for symbol in symbols.split(",") if symbol.strip())
     if requested and not requested.issubset(configured):
         await websocket.close(code=1008, reason="Only configured stream symbols are available")
@@ -344,7 +358,7 @@ _WS_TESTER_HTML = """<!doctype html>
       or pass a comma-separated subset (example: <code>AAPL,BINANCE:BTCUSDT</code>).
     </p>
     <div class="row">
-      <input id="symbols" placeholder="symbols (optional)" value="AAPL" />
+      <input id="symbols" placeholder="leave empty for all curated symbols" value="" />
       <button id="connect">Connect</button>
       <button id="disconnect" class="secondary">Disconnect</button>
     </div>
@@ -367,28 +381,59 @@ _WS_TESTER_HTML = """<!doctype html>
       return `${protocol}//${location.host}/ws/live${query}`;
     }
 
+    function detachSocket(active) {
+      if (!active) return;
+      active.onopen = null;
+      active.onmessage = null;
+      active.onerror = null;
+      active.onclose = null;
+      try {
+        if (active.readyState === WebSocket.CONNECTING || active.readyState === WebSocket.OPEN) {
+          active.close(1000, "client disconnect");
+        }
+      } catch (error) {
+        log(`disconnect error: ${error}`);
+      }
+    }
+
+    function disconnect(reason = "disconnected") {
+      const active = socket;
+      socket = null;
+      statusEl.textContent = reason;
+      if (active) {
+        detachSocket(active);
+        log("disconnected by user");
+      }
+    }
+
     document.getElementById("connect").onclick = () => {
-      if (socket) socket.close();
+      disconnect("reconnecting…");
       const symbols = document.getElementById("symbols").value.trim();
       const url = wsUrl(symbols);
       statusEl.textContent = "connecting…";
-      socket = new WebSocket(url);
-      socket.onopen = () => {
+      const active = new WebSocket(url);
+      socket = active;
+      active.onopen = () => {
+        if (socket !== active) return;
         statusEl.textContent = "connected";
         log(`opened ${url}`);
       };
-      socket.onmessage = (event) => log(event.data);
-      socket.onerror = () => log("socket error");
-      socket.onclose = (event) => {
+      active.onmessage = (event) => {
+        if (socket !== active) return;
+        log(event.data);
+      };
+      active.onerror = () => {
+        if (socket !== active) return;
+        log("socket error");
+      };
+      active.onclose = (event) => {
+        if (socket === active) socket = null;
         statusEl.textContent = `closed (${event.code})`;
         log(`closed code=${event.code} reason=${event.reason || "-"}`);
-        socket = null;
       };
     };
 
-    document.getElementById("disconnect").onclick = () => {
-      if (socket) socket.close();
-    };
+    document.getElementById("disconnect").onclick = () => disconnect();
   </script>
 </body>
 </html>

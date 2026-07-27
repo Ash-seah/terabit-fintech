@@ -65,6 +65,11 @@ deploying.
 Market payloads are returned unwrapped (no provider/resource envelope). Entitlement
 failures are `403`; quota exhaustion `429`; upstream outages `503`.
 
+Quota strategy: overview and quotes use Yahoo + live WebSocket cache first. Finnhub
+REST is reserved for fundamentals/news/calendars/search, soft-cached aggressively
+(stale responses are served while refreshing), and capped at
+`FINNHUB_REST_CALLS_PER_MINUTE` (default 20).
+
 Historical requests check Redis, then sufficiently fresh PostgreSQL bars, and finally
 run the synchronous yfinance request in a worker thread. New bars are upserted into
 PostgreSQL and cached for 15 minutes. Daily charts default to `max` history.
@@ -87,8 +92,8 @@ ws://localhost:8000/ws/live?symbols=AAPL,BINANCE:BTCUSDT
 
 The server sends `trade` batches and a heartbeat after 30 seconds without client
 traffic. Slow clients have bounded queues and are disconnected instead of delaying
-the broadcast loop. Configure up to the provider allowance with `STREAM_SYMBOLS`
-(defaults to the curated overview universe).
+the broadcast loop. The curated overview universe is always subscribed on the
+upstream Finnhub socket. `STREAM_SYMBOLS` is only for optional extras.
 
 ## Storage and caching
 

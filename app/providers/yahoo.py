@@ -1,10 +1,12 @@
 import asyncio
 import math
-from datetime import UTC
+from datetime import UTC, datetime
+from typing import Any
 
 import yfinance as yf  # type: ignore[import-untyped]
 from yfinance.exceptions import YFPricesMissingError  # type: ignore[import-untyped]
 
+from app.core.symbols import yfinance_symbol_for
 from app.schemas import HistoricalPoint
 
 
@@ -19,6 +21,12 @@ class HistoricalProviderError(Exception):
 class YahooFinanceProvider:
     async def history(self, symbol: str, period: str, interval: str) -> list[HistoricalPoint]:
         return await asyncio.to_thread(self._history_sync, symbol, period, interval)
+
+    async def quote(self, symbol: str) -> dict[str, Any]:
+        return await asyncio.to_thread(self._quote_sync, symbol)
+
+    async def quotes(self, symbols: tuple[str, ...]) -> dict[str, dict[str, Any]]:
+        return await asyncio.to_thread(self._quotes_sync, symbols)
 
     @staticmethod
     def _history_sync(symbol: str, period: str, interval: str) -> list[HistoricalPoint]:
@@ -59,3 +67,64 @@ class YahooFinanceProvider:
         if not points:
             raise HistoricalDataNotFoundError(f"No usable historical data found for {symbol}")
         return points
+
+    @classmethod
+    def _quote_sync(cls, symbol: str) -> dict[str, Any]:
+        quotes = cls._quotes_sync((symbol,))
+        if symbol not in quotes:
+            raise HistoricalProviderError(f"Quote unavailable for {symbol}")
+        return quotes[symbol]
+
+    @staticmethod
+    def _quotes_sync(symbols: tuple[str, ...]) -> dict[str, dict[str, Any]]:
+        """Batch-fetch last/previous close via one Yahoo download (spares Finnhub)."""
+        if not symbols:
+            return {}
+        yahoo_to_api = {yfinance_symbol_for(symbol): symbol for symbol in symbols}
+        yahoo_symbols = list(yahoo_to_api.keys())
+        try:
+            frame = yf.download(
+                tickers=yahoo_symbols,
+                period="5d",
+                interval="1d",
+                group_by="ticker",
+                auto_adjust=False,
+                threads=True,
+                progress=False,
+            )
+        except Exception as exc:
+            raise HistoricalProviderError("Batch quote fetch failed") from exc
+
+        results: dict[str, dict[str, Any]] = {}
+        now_ts = int(datetime.now(UTC).timestamp())
+        for yahoo_symbol, api_symbol in yahoo_to_api.items():
+            try:
+                if len(yahoo_symbols) == 1:
+                    series = frame
+                else:
+                    if yahoo_symbol not in frame.columns.get_level_values(0):
+                        continue
+                    series = frame[yahoo_symbol]
+                closes = series["Close"].dropna()
+                if closes.empty:
+                    continue
+                last = float(closes.iloc[-1])
+                previous = float(closes.iloc[-2]) if len(closes) > 1 else last
+                change = last - previous
+                change_percent = (change / previous) * 100 if previous else 0.0
+                opens = series["Open"].dropna()
+                highs = series["High"].dropna()
+                lows = series["Low"].dropna()
+                results[api_symbol] = {
+                    "c": last,
+                    "pc": previous,
+                    "d": change,
+                    "dp": change_percent,
+                    "o": float(opens.iloc[-1]) if not opens.empty else last,
+                    "h": float(highs.iloc[-1]) if not highs.empty else last,
+                    "l": float(lows.iloc[-1]) if not lows.empty else last,
+                    "t": now_ts,
+                }
+            except Exception:
+                continue
+        return results
