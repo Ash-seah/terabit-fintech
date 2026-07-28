@@ -75,6 +75,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         yahoo,
         ttl=config.overview_cache_ttl_seconds,
     )
+    app.state.symbols_service.warm()
     app.state.quote_service = QuoteService(
         cache,
         yahoo,

@@ -132,11 +132,43 @@ async def tradingview_chart(
 async def symbols(
     request: Request,
     asset_class: Annotated[
-        AssetClassQuery,
-        Query(description="Market universe: stocks, crypto, or forex"),
-    ],
+        AssetClassQuery | None,
+        Query(description="stocks, crypto, or forex; omit for all three"),
+    ] = None,
+    sorted_by: Annotated[
+        Literal[
+            "symbol",
+            "name",
+            "price",
+            "change",
+            "change_percent",
+            "volatility",
+        ]
+        | None,
+        Query(
+            description=(
+                "Sort field. Use volatility for abs(day %% change) — "
+                "pair with limit=10 for top movers."
+            )
+        ),
+    ] = None,
+    order: Annotated[
+        Literal["asc", "desc"] | None,
+        Query(description="Sort direction; defaults to desc for price/change/volatility"),
+    ] = None,
+    page: Annotated[int, Query(ge=1, description="1-based page number")] = 1,
+    limit: Annotated[
+        int,
+        Query(ge=1, le=500, description="Page size (use 10 for top movers)"),
+    ] = 50,
 ) -> SymbolsResponse:
-    return await _symbols_service(request).get(asset_class)
+    return await _symbols_service(request).get(
+        asset_class,
+        sorted_by=sorted_by,
+        order=order,
+        page=page,
+        limit=limit,
+    )
 
 
 @market_router.get("/quotes/{symbol}")

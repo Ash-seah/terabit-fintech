@@ -21,3 +21,6 @@ def configure_logging(level: str) -> None:
     handler = logging.StreamHandler()
     handler.setFormatter(JsonFormatter())
     logging.basicConfig(level=level.upper(), handlers=[handler], force=True)
+    # yfinance logs noisy "possibly delisted" warnings for flaky batch misses.
+    logging.getLogger("yfinance").setLevel(logging.CRITICAL)
+    logging.getLogger("peewee").setLevel(logging.WARNING)

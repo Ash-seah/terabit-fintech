@@ -45,14 +45,19 @@ class SymbolCard(BaseModel):
     symbol: str
     name: str
     description: str
+    asset_class: Literal["stocks", "crypto", "forex"]
     price: float | None = None
     change: float | None = None
     change_percent: float | None = None
 
 
 class SymbolsResponse(BaseModel):
-    asset_class: Literal["stocks", "crypto", "forex"]
-    count: int
+    asset_class: Literal["stocks", "crypto", "forex", "all"]
+    total: int
+    page: int
+    limit: int
+    sorted_by: str | None = None
+    order: Literal["asc", "desc"] | None = None
     items: list[SymbolCard]
 
 

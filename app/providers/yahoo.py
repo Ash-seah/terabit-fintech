@@ -33,10 +33,13 @@ class YahooFinanceProvider:
             symbols[offset : offset + chunk_size]
             for offset in range(0, len(symbols), chunk_size)
         ]
-        # Parallel chunks keep large universes under gateway timeouts.
-        parts = await asyncio.gather(
-            *[asyncio.to_thread(self._quotes_chunk_sync, chunk) for chunk in chunks]
-        )
+        semaphore = asyncio.Semaphore(2)
+
+        async def _one(chunk: tuple[str, ...]) -> dict[str, dict[str, Any]]:
+            async with semaphore:
+                return await asyncio.to_thread(self._quotes_chunk_sync, chunk)
+
+        parts = await asyncio.gather(*[_one(chunk) for chunk in chunks])
         merged: dict[str, dict[str, Any]] = {}
         for part in parts:
             merged.update(part)
