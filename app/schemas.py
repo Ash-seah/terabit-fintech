@@ -18,6 +18,8 @@ class HistoricalResponse(BaseModel):
     interval: str
     period: str
     cached: bool = False
+    partial: bool = False
+    loading: bool = False
     points: list[HistoricalPoint]
 
 
@@ -36,6 +38,8 @@ class TradingViewHistoryResponse(BaseModel):
     symbol: str
     interval: str
     cached: bool = False
+    partial: bool = False
+    loading: bool = False
     bars: list[TradingViewBar]
 
 

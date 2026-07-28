@@ -48,12 +48,13 @@ class MemoryCache:
 
 
 class SlowProvider:
-    def __init__(self) -> None:
+    def __init__(self, delay: float = 0.2) -> None:
         self.calls = 0
+        self.delay = delay
 
     async def history(self, symbol: str, period: str, interval: str) -> list[HistoricalPoint]:
         self.calls += 1
-        await asyncio.sleep(0.2)
+        await asyncio.sleep(self.delay)
         return [point()]
 
 
@@ -69,27 +70,40 @@ class FakeSessions:
 
 
 @pytest.mark.asyncio
-async def test_cold_chart_single_flight_waits_for_peer() -> None:
+async def test_cold_chart_returns_within_two_seconds() -> None:
     cache = MemoryCache()
-    provider = SlowProvider()
+    provider = SlowProvider(delay=5.0)  # slower than quick-paint budget
 
     async def fake_db(*args: Any, **kwargs: Any) -> None:
         return None
 
     service = HistoricalService(cache, FakeSessions(), provider, ttl=60)  # type: ignore[arg-type]
-    service._read_db = fake_db  # type: ignore[method-assign]
+    service._read_db_any = fake_db  # type: ignore[method-assign]
 
-    async def holder() -> Any:
-        return await service.get("USD-PLN", "5d", "1h")
+    started = asyncio.get_running_loop().time()
+    response = await service.get("USD-PLN", "5d", "1h")
+    elapsed = asyncio.get_running_loop().time() - started
 
-    async def waiter() -> Any:
-        await asyncio.sleep(0.05)
-        return await service.get("USD-PLN", "5d", "1h")
+    assert elapsed < 2.0
+    assert response.loading is True or response.points
+    # Provider may still be running in background; request itself must be fast.
 
-    first, second = await asyncio.gather(holder(), waiter())
-    assert first.points
-    assert second.points
-    assert provider.calls == 1
+
+@pytest.mark.asyncio
+async def test_cold_chart_quick_paint_when_provider_fast() -> None:
+    cache = MemoryCache()
+    provider = SlowProvider(delay=0.05)
+
+    async def fake_db(*args: Any, **kwargs: Any) -> None:
+        return None
+
+    service = HistoricalService(cache, FakeSessions(), provider, ttl=60)  # type: ignore[arg-type]
+    service._read_db_any = fake_db  # type: ignore[method-assign]
+
+    response = await service.get("USD-PLN", "5d", "1h")
+    assert response.points
+    assert response.loading is False
+    assert provider.calls >= 1
 
 
 @pytest.mark.asyncio
@@ -101,8 +115,11 @@ async def test_soft_cache_avoids_provider_on_hit() -> None:
         "interval": "1h",
         "period": "5d",
         "cached": False,
+        "partial": False,
+        "loading": False,
         "points": [point().model_dump(mode="json")],
     }
+    cache.store[f"{key}:fresh"] = "1"
 
     class BoomProvider:
         async def history(self, *args: Any, **kwargs: Any) -> list[HistoricalPoint]:
@@ -112,3 +129,33 @@ async def test_soft_cache_avoids_provider_on_hit() -> None:
     response = await service.get("USD-PLN", "5d", "1h")
     assert response.cached is True
     assert response.symbol == "USD-PLN"
+
+
+@pytest.mark.asyncio
+async def test_db_bars_served_without_waiting_on_provider() -> None:
+    cache = MemoryCache()
+
+    class BoomProvider:
+        async def history(self, *args: Any, **kwargs: Any) -> list[HistoricalPoint]:
+            await asyncio.sleep(5)
+            raise HistoricalProviderError("too slow")
+
+    service = HistoricalService(cache, FakeSessions(), BoomProvider(), ttl=60)  # type: ignore[arg-type]
+
+    async def fake_db(*args: Any, **kwargs: Any) -> Any:
+        from app.schemas import HistoricalResponse
+
+        return HistoricalResponse(
+            symbol="USD-PLN",
+            interval="1h",
+            period="5d",
+            points=[point()],
+        )
+
+    service._read_db_any = fake_db  # type: ignore[method-assign]
+    started = asyncio.get_running_loop().time()
+    response = await service.get("USD-PLN", "5d", "1h")
+    elapsed = asyncio.get_running_loop().time() - started
+    assert elapsed < 1.0
+    assert response.points
+    assert response.cached is True

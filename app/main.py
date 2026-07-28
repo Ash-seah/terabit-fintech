@@ -23,6 +23,7 @@ from app.providers.finnhub import (
 from app.providers.yahoo import YahooFinanceProvider
 from app.schemas import Trade
 from app.services.cache import Cache, RedisTokenBucket
+from app.services.chart_prefetch import chart_prefetch_worker
 from app.services.historical import HistoricalService
 from app.services.market import MarketDataService
 from app.services.marketmap import MarketMapService
@@ -136,6 +137,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         asyncio.create_task(
             retention_worker(database.session_factory, config.raw_trade_retention_days),
             name="trade-retention",
+        ),
+        asyncio.create_task(
+            chart_prefetch_worker(app.state.historical_service),
+            name="chart-prefetch",
         ),
     ]
     try:

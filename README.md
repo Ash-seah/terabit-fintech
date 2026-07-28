@@ -81,9 +81,10 @@ REST is reserved for fundamentals/news/calendars/search, soft-cached aggressivel
 (stale responses are served while refreshing), and capped at
 `FINNHUB_REST_CALLS_PER_MINUTE` (default 20).
 
-Historical requests check Redis, then sufficiently fresh PostgreSQL bars, and finally
-run the synchronous yfinance request in a worker thread. New bars are upserted into
-PostgreSQL and cached for 15 minutes. Daily charts default to `max` history.
+Historical requests check Redis, then PostgreSQL bars, and return inside ~2 seconds.
+On a cold miss the API may return `partial`/`loading` bars immediately while a
+background job (and the chart prefetch worker) fills full history into Postgres + Redis.
+Daily charts default to deep history once warmed.
 
 ## WebSocket
 

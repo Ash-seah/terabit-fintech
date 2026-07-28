@@ -81,6 +81,38 @@ async def get_historical_bars(
     ]
 
 
+async def get_recent_historical_bars(
+    session: AsyncSession,
+    symbol: str,
+    interval: str,
+    *,
+    limit: int = 2_000,
+) -> list[HistoricalPoint]:
+    """Latest bars for a symbol/interval (any age) — for fast first paint."""
+    result = await session.scalars(
+        select(HistoricalBar)
+        .where(
+            HistoricalBar.symbol == symbol,
+            HistoricalBar.interval == interval,
+        )
+        .order_by(HistoricalBar.timestamp.desc())
+        .limit(limit)
+    )
+    points = [
+        HistoricalPoint(
+            timestamp=bar.timestamp,
+            open=float(bar.open),
+            high=float(bar.high),
+            low=float(bar.low),
+            close=float(bar.close),
+            volume=bar.volume,
+        )
+        for bar in result
+    ]
+    points.reverse()
+    return points
+
+
 async def upsert_snapshot(
     session: AsyncSession,
     resource_key: str,
