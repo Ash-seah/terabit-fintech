@@ -10,26 +10,23 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.symbols import (
-    DEFAULT_FOREX_EXCHANGE,
+    AssetClassQuery,
     DEFAULT_STOCK_EXCHANGE,
-    forex_catalog_payload,
     normalize_symbol,
-    sanitize_forex_upstream_list,
-    symbols_by_asset_class,
 )
 from app.providers.yahoo import HistoricalDataNotFoundError, HistoricalProviderError
 from app.schemas import (
     ErrorResponse,
     HeartbeatEvent,
     HistoricalResponse,
+    MarketMapResponse,
     MarketPayload,
     SubscribedEvent,
-    SymbolsOverviewResponse,
     TradingViewHistoryResponse,
 )
 from app.services.historical import HistoricalService
 from app.services.market import MarketDataService
-from app.services.overview import OverviewService
+from app.services.marketmap import MarketMapService
 from app.services.quotes import QuoteService
 from app.services.streaming import ConnectionManager
 
@@ -55,8 +52,8 @@ def _market_service(request: Request) -> MarketDataService:
     return request.app.state.market_service  # type: ignore[no-any-return]
 
 
-def _overview_service(request: Request) -> OverviewService:
-    return request.app.state.overview_service  # type: ignore[no-any-return]
+def _marketmap_service(request: Request) -> MarketMapService:
+    return request.app.state.marketmap_service  # type: ignore[no-any-return]
 
 
 def _quote_service(request: Request) -> QuoteService:
@@ -128,12 +125,18 @@ async def tradingview_chart(
 
 
 @market_router.get(
-    "/symbols",
-    response_model=SymbolsOverviewResponse,
-    summary="Full symbol overview (equities, crypto, FX)",
+    "/marketmap",
+    response_model=MarketMapResponse,
+    summary="Bulk market-map data (stocks, crypto, or forex)",
 )
-async def symbols_overview(request: Request) -> SymbolsOverviewResponse:
-    return await _overview_service(request).list_symbols()
+async def marketmap(
+    request: Request,
+    asset_class: Annotated[
+        AssetClassQuery,
+        Query(description="Market universe: stocks, crypto, or forex"),
+    ],
+) -> MarketMapResponse:
+    return await _marketmap_service(request).get(asset_class)
 
 
 @market_router.get("/quotes/{symbol}")
@@ -273,41 +276,6 @@ async def earnings_calendar(
     )
 
 
-@market_router.get("/forex/symbols")
-async def forex_symbols(request: Request) -> list[dict[str, str]]:
-    try:
-        payload = await _market(
-            request,
-            "forex-symbols",
-            "/forex/symbol",
-            {"exchange": DEFAULT_FOREX_EXCHANGE},
-            604_800,
-        )
-        cleaned = sanitize_forex_upstream_list(payload)
-        if len(cleaned) >= len(forex_catalog_payload()):
-            return cleaned
-        # Merge upstream + local catalog so majors/crosses/metals are always present.
-        by_symbol = {item["symbol"]: item for item in cleaned}
-        for item in forex_catalog_payload():
-            by_symbol.setdefault(item["symbol"], item)
-        return sorted(by_symbol.values(), key=lambda row: row["symbol"])
-    except Exception:
-        return forex_catalog_payload()
-
-
-@market_router.get("/crypto/symbols")
-async def crypto_symbols() -> list[dict[str, str]]:
-    return [
-        {
-            "symbol": item.symbol,
-            "name": item.name,
-            "display_symbol": item.symbol,
-            "asset_class": item.asset_class,
-        }
-        for item in symbols_by_asset_class("crypto")
-    ]
-
-
 @router.get("/health/live", tags=["health"])
 async def liveness() -> dict[str, str]:
     return {"status": "ok"}
@@ -420,8 +388,8 @@ _WS_TESTER_HTML = """<!doctype html>
     <p>
       Connects to <code>/ws/live</code>. Leave symbols empty for all curated streams
       (equities like <code>NVDA</code>, crypto like <code>BTC-USD</code>, FX like
-      <code>EUR-USD</code>). Stocks live under
-      <code>/api/v1/symbols</code>, not forex.
+      <code>EUR-USD</code>). Market map bulk data:
+      <code>/api/v1/marketmap?asset_class=stocks|crypto|forex</code>.
     </p>
     <div class="row">
       <input id="symbols" placeholder="leave empty for all curated symbols" value="" />

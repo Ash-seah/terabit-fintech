@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
+
+from app.core.catalogs import CRYPTO_CATALOG, STOCK_CATALOG
+
+AssetClassQuery = Literal["stocks", "crypto", "forex"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -16,6 +20,13 @@ class SymbolSpec:
     yfinance_symbol: str
     stream_symbol: str  # upstream live feed identifier
     stream: bool = True
+
+
+@dataclass(frozen=True, slots=True)
+class MarketMapEntry:
+    symbol: str
+    name: str
+    asset_class: str  # equity | crypto | forex
 
 
 # Keep stream count under the free live-feed ceiling (50).
@@ -69,7 +80,7 @@ DEFAULT_STOCK_EXCHANGE = "US"
 DEFAULT_CRYPTO_EXCHANGE = "binance"
 DEFAULT_FOREX_EXCHANGE = "oanda"
 
-# Full FX catalog for GET /forex/symbols (majors, crosses, metals, selected exotics).
+# Full FX catalog for market map (majors, crosses, metals, selected exotics).
 FOREX_CATALOG: tuple[tuple[str, str], ...] = (
     ("EUR-USD", "Euro / US Dollar"),
     ("GBP-USD", "British Pound / US Dollar"),
@@ -134,6 +145,10 @@ FOREX_CATALOG: tuple[tuple[str, str], ...] = (
     ("XAG-AUD", "Silver / Australian Dollar"),
 )
 
+_STOCK_SYMBOLS = {symbol for symbol, _ in STOCK_CATALOG}
+_CRYPTO_SYMBOLS = {symbol for symbol, _ in CRYPTO_CATALOG}
+_FOREX_SYMBOLS = {symbol for symbol, _ in FOREX_CATALOG}
+
 _ALIAS_TO_PUBLIC: dict[str, str] = {}
 for _spec in CURATED_SYMBOLS:
     _ALIAS_TO_PUBLIC[_spec.symbol.upper()] = _spec.symbol
@@ -144,6 +159,14 @@ for _symbol, _ in FOREX_CATALOG:
     _ALIAS_TO_PUBLIC[_symbol.replace("-", "").upper()] = _symbol
     _ALIAS_TO_PUBLIC[_symbol.replace("-", "/").upper()] = _symbol
     _ALIAS_TO_PUBLIC[f"OANDA:{_symbol.replace('-', '_')}"] = _symbol
+for _symbol, _ in STOCK_CATALOG:
+    _ALIAS_TO_PUBLIC[_symbol.upper()] = _symbol
+for _symbol, _ in CRYPTO_CATALOG:
+    _ALIAS_TO_PUBLIC[_symbol.upper()] = _symbol
+    _ALIAS_TO_PUBLIC[_symbol.replace("-", "").upper()] = _symbol
+    base = _symbol.split("-", 1)[0]
+    _ALIAS_TO_PUBLIC[f"{base}USDT"] = _symbol
+    _ALIAS_TO_PUBLIC[f"BINANCE:{base}USDT"] = _symbol
 
 _ALIAS_TO_PUBLIC["BTCUSDT"] = "BTC-USD"
 _ALIAS_TO_PUBLIC["ETHUSDT"] = "ETH-USD"
@@ -151,6 +174,8 @@ _ALIAS_TO_PUBLIC["SOLUSDT"] = "SOL-USD"
 _ALIAS_TO_PUBLIC["BTCUSD"] = "BTC-USD"
 _ALIAS_TO_PUBLIC["EURUSD"] = "EUR-USD"
 _ALIAS_TO_PUBLIC["GBPUSD"] = "GBP-USD"
+_ALIAS_TO_PUBLIC["BRK.B"] = "BRK-B"
+_ALIAS_TO_PUBLIC["BRK/B"] = "BRK-B"
 
 
 def curated_by_symbol() -> dict[str, SymbolSpec]:
@@ -200,9 +225,21 @@ def yfinance_symbol_for(symbol: str) -> str:
     if mapped is not None:
         return mapped.yfinance_symbol
     public = normalize_symbol(symbol)
-    if "-" in public:
+    if public in _CRYPTO_SYMBOLS or public in _STOCK_SYMBOLS:
+        return public
+    if public in _FOREX_SYMBOLS or _looks_like_fx(public):
         return _yahoo_fx_symbol(public)
-    return symbol
+    return public
+
+
+def _looks_like_fx(public: str) -> bool:
+    parts = public.split("-")
+    if len(parts) != 2:
+        return False
+    base, quote = parts
+    metals = {"XAU", "XAG"}
+    # Currency codes are typically 3 letters; avoid treating BRK-B / crypto as FX.
+    return (len(base) == 3 and len(quote) == 3) or base in metals or quote in metals
 
 
 def stream_symbol_for(symbol: str) -> str:
@@ -210,9 +247,12 @@ def stream_symbol_for(symbol: str) -> str:
     if mapped is not None:
         return mapped.stream_symbol
     public = normalize_symbol(symbol)
-    if "-" in public:
+    if public in _CRYPTO_SYMBOLS:
+        base = public.split("-", 1)[0]
+        return f"BINANCE:{base}USDT"
+    if public in _FOREX_SYMBOLS or _looks_like_fx(public):
         return f"OANDA:{public.replace('-', '_')}"
-    return symbol
+    return public
 
 
 def public_symbol_for(upstream_or_public: str) -> str:
@@ -221,6 +261,24 @@ def public_symbol_for(upstream_or_public: str) -> str:
 
 def symbols_by_asset_class(asset_class: str) -> tuple[SymbolSpec, ...]:
     return tuple(item for item in CURATED_SYMBOLS if item.asset_class == asset_class)
+
+
+def marketmap_universe(asset_class: AssetClassQuery) -> tuple[MarketMapEntry, ...]:
+    """Full market-map catalog for stocks, crypto, or forex."""
+    if asset_class == "stocks":
+        return tuple(
+            MarketMapEntry(symbol=symbol, name=name, asset_class="equity")
+            for symbol, name in STOCK_CATALOG
+        )
+    if asset_class == "crypto":
+        return tuple(
+            MarketMapEntry(symbol=symbol, name=name, asset_class="crypto")
+            for symbol, name in CRYPTO_CATALOG
+        )
+    return tuple(
+        MarketMapEntry(symbol=symbol, name=name, asset_class="forex")
+        for symbol, name in FOREX_CATALOG
+    )
 
 
 def forex_catalog_payload() -> list[dict[str, str]]:

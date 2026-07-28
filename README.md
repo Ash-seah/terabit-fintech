@@ -34,7 +34,7 @@ If the host proxies only `location /api` and `location /ws` (as on
 - ReDoc: `https://fintech.terabitventure.com/api/redoc`
 - WebSocket tester: `https://fintech.terabitventure.com/api/ws-tester`
 - Live WebSocket: `wss://fintech.terabitventure.com/ws/live`
-- Symbol overview: `https://fintech.terabitventure.com/api/v1/symbols`
+- Market map: `https://fintech.terabitventure.com/api/v1/marketmap?asset_class=stocks`
 - TradingView OHLC: `https://fintech.terabitventure.com/api/v1/charts/AAPL`
 
 Do not bind AsyncAPI `:8080` to `0.0.0.0` on a public VPS; scanners will hit it.
@@ -46,7 +46,7 @@ deploying.
 
 ## REST endpoints
 
-- `GET /api/v1/symbols` — full overview (equities, crypto, FX) with prices
+- `GET /api/v1/marketmap?asset_class=stocks|crypto|forex` — bulk market-map cards (name, ticker, price, day change)
 - `GET /api/v1/charts/{ticker}?interval=1d` — TradingView Lightweight Charts OHLC
 - `GET /api/v1/historical/{ticker}?interval=1d` — same bars as structured points (defaults to deepest available history)
 - `GET /api/v1/quotes/{symbol}`
@@ -59,15 +59,13 @@ deploying.
 - `GET /api/v1/companies/{symbol}/earnings`
 - `GET /api/v1/companies/{symbol}/recommendations`
 - `GET /api/v1/calendars/earnings` — defaults to the next 30 days
-- `GET /api/v1/forex/symbols` — major FX pairs (`EUR-USD`, …)
-- `GET /api/v1/crypto/symbols` — major crypto (`BTC-USD`, …)
 
-`NVDA` and other equities are on `/api/v1/symbols`, not `/api/v1/forex/symbols`.
+Use `asset_class=stocks` for equities (e.g. `NVDA`), `crypto` for coins (e.g. `BTC-USD`), and `forex` for FX pairs (e.g. `EUR-USD`).
 
 Market payloads are returned unwrapped (no provider/resource envelope). Entitlement
 failures are `403`; quota exhaustion `429`; upstream outages `503`.
 
-Quota strategy: overview and quotes use Yahoo + live WebSocket cache first. Finnhub
+Quota strategy: market map and quotes use Yahoo + live WebSocket cache first. Finnhub
 REST is reserved for fundamentals/news/calendars/search, soft-cached aggressively
 (stale responses are served while refreshing), and capped at
 `FINNHUB_REST_CALLS_PER_MINUTE` (default 20).
@@ -94,7 +92,7 @@ ws://localhost:8000/ws/live?symbols=AAPL,NVDA,BTC-USD
 
 The server sends `trade` batches and a heartbeat after 30 seconds without client
 traffic. Slow clients have bounded queues and are disconnected instead of delaying
-the broadcast loop. The curated overview universe is always subscribed on the
+the broadcast loop. The curated live-stream universe is always subscribed on the
 upstream Finnhub socket. `STREAM_SYMBOLS` is only for optional extras.
 
 ## Storage and caching

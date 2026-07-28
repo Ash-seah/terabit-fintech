@@ -75,11 +75,19 @@ class YahooFinanceProvider:
             raise HistoricalProviderError(f"Quote unavailable for {symbol}")
         return quotes[symbol]
 
-    @staticmethod
-    def _quotes_sync(symbols: tuple[str, ...]) -> dict[str, dict[str, Any]]:
-        """Batch-fetch last/previous close via one Yahoo download (spares Finnhub)."""
+    @classmethod
+    def _quotes_sync(cls, symbols: tuple[str, ...]) -> dict[str, dict[str, Any]]:
+        """Batch-fetch last/previous close via chunked Yahoo downloads."""
         if not symbols:
             return {}
+        results: dict[str, dict[str, Any]] = {}
+        chunk_size = 40
+        for offset in range(0, len(symbols), chunk_size):
+            results.update(cls._quotes_chunk_sync(symbols[offset : offset + chunk_size]))
+        return results
+
+    @staticmethod
+    def _quotes_chunk_sync(symbols: tuple[str, ...]) -> dict[str, dict[str, Any]]:
         yahoo_to_api = {yfinance_symbol_for(symbol): symbol for symbol in symbols}
         yahoo_symbols = list(yahoo_to_api.keys())
         try:

@@ -25,7 +25,7 @@ from app.schemas import Trade
 from app.services.cache import Cache, RedisTokenBucket
 from app.services.historical import HistoricalService
 from app.services.market import MarketDataService
-from app.services.overview import OverviewService
+from app.services.marketmap import MarketMapService
 from app.services.quotes import QuoteService
 from app.services.streaming import (
     ConnectionManager,
@@ -70,10 +70,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         finnhub,
         config.finnhub_rest_calls_per_minute,
     )
-    app.state.overview_service = OverviewService(
+    app.state.marketmap_service = MarketMapService(
         cache,
         yahoo,
-        database.session_factory,
         ttl=config.overview_cache_ttl_seconds,
     )
     app.state.quote_service = QuoteService(
