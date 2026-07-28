@@ -61,6 +61,27 @@ class SymbolsResponse(BaseModel):
     items: list[SymbolCard]
 
 
+class MarketMapItem(BaseModel):
+    """Lean heatmap tile for US stocks."""
+
+    symbol: str
+    name: str
+    description: str
+    logo: str
+    sector: str
+    market_cap: float
+    price: float | None = None
+    change: float | None = None
+    change_percent: float | None = None
+
+
+class MarketMapResponse(BaseModel):
+    count: int
+    sorted_by: str
+    order: Literal["asc", "desc"]
+    items: list[MarketMapItem]
+
+
 class Trade(BaseModel):
     model_config = ConfigDict(extra="ignore")
 

@@ -52,6 +52,9 @@ deploying.
   - `order=asc|desc` (defaults to `desc` for price/change/volatility)
   - `page` + `limit` pagination (e.g. top 10 movers:
     `?asset_class=crypto&sorted_by=volatility&limit=10`)
+- `GET /api/v1/marketmap` — US stocks heatmap tiles (name, logo, sector, blurb, market cap, day change)
+  - `sorted_by=change_percent` (default), also `change|volatility|market_cap|price|name|symbol`
+  - optional `limit` for top-N after sort
 - `GET /api/v1/charts/{ticker}?interval=1d` — TradingView Lightweight Charts OHLC
 - `GET /api/v1/historical/{ticker}?interval=1d` — same bars as structured points (defaults to deepest available history)
 - `GET /api/v1/quotes/{symbol}`

@@ -25,6 +25,7 @@ from app.schemas import Trade
 from app.services.cache import Cache, RedisTokenBucket
 from app.services.historical import HistoricalService
 from app.services.market import MarketDataService
+from app.services.marketmap import MarketMapService
 from app.services.quotes import QuoteService
 from app.services.symbols import SymbolsService
 from app.services.streaming import (
@@ -76,6 +77,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         ttl=config.overview_cache_ttl_seconds,
     )
     app.state.symbols_service.warm()
+    app.state.marketmap_service = MarketMapService(
+        cache,
+        yahoo,
+        ttl=config.overview_cache_ttl_seconds,
+    )
+    app.state.marketmap_service.warm()
     app.state.quote_service = QuoteService(
         cache,
         yahoo,

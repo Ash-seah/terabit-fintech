@@ -19,6 +19,7 @@ from app.schemas import (
     ErrorResponse,
     HeartbeatEvent,
     HistoricalResponse,
+    MarketMapResponse,
     MarketPayload,
     SubscribedEvent,
     SymbolsResponse,
@@ -26,6 +27,7 @@ from app.schemas import (
 )
 from app.services.historical import HistoricalService
 from app.services.market import MarketDataService
+from app.services.marketmap import MarketMapService
 from app.services.quotes import QuoteService
 from app.services.streaming import ConnectionManager
 from app.services.symbols import SymbolsService
@@ -54,6 +56,10 @@ def _market_service(request: Request) -> MarketDataService:
 
 def _symbols_service(request: Request) -> SymbolsService:
     return request.app.state.symbols_service  # type: ignore[no-any-return]
+
+
+def _marketmap_service(request: Request) -> MarketMapService:
+    return request.app.state.marketmap_service  # type: ignore[no-any-return]
 
 
 def _quote_service(request: Request) -> QuoteService:
@@ -167,6 +173,41 @@ async def symbols(
         sorted_by=sorted_by,
         order=order,
         page=page,
+        limit=limit,
+    )
+
+
+@market_router.get(
+    "/marketmap",
+    response_model=MarketMapResponse,
+    summary="US stocks market-map tiles (logos, sector, day change)",
+)
+async def marketmap(
+    request: Request,
+    sorted_by: Annotated[
+        Literal[
+            "change",
+            "change_percent",
+            "volatility",
+            "market_cap",
+            "price",
+            "name",
+            "symbol",
+        ],
+        Query(description="Default change_percent — best for heatmap coloring"),
+    ] = "change_percent",
+    order: Annotated[
+        Literal["asc", "desc"] | None,
+        Query(description="Defaults to desc for change/market_cap/price"),
+    ] = None,
+    limit: Annotated[
+        int | None,
+        Query(ge=1, le=500, description="Optional top-N after sort"),
+    ] = None,
+) -> MarketMapResponse:
+    return await _marketmap_service(request).get(
+        sorted_by=sorted_by,
+        order=order,
         limit=limit,
     )
 

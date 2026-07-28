@@ -1,0 +1,156 @@
+"""Static stock metadata for the market-map heatmap (logos, sectors, blurbs)."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True, slots=True)
+class MarketMapStock:
+    symbol: str
+    name: str
+    description: str
+    sector: str
+    market_cap: float  # approximate USD for tile sizing
+    domain: str
+
+    @property
+    def logo(self) -> str:
+        # Public ticker logo CDN (no API key). Hyphenated tickers use dot form.
+        tidy = self.symbol.replace("-", ".")
+        return f"https://assets.parqet.com/logos/symbol/{tidy}"
+
+
+# Curated US large/mid caps for heatmap tiles.
+MARKETMAP_STOCKS: tuple[MarketMapStock, ...] = (
+    MarketMapStock("AAPL", "Apple", "Consumer electronics, services, and wearables.", "Technology", 3.4e12, "apple.com"),
+    MarketMapStock("MSFT", "Microsoft", "Cloud, productivity software, and AI platforms.", "Technology", 3.1e12, "microsoft.com"),
+    MarketMapStock("GOOGL", "Alphabet", "Search, YouTube, cloud, and advertising.", "Communication Services", 2.1e12, "abc.xyz"),
+    MarketMapStock("AMZN", "Amazon", "E-commerce, AWS cloud, and digital advertising.", "Consumer Discretionary", 2.0e12, "amazon.com"),
+    MarketMapStock("NVDA", "NVIDIA", "GPUs and AI data-center chips.", "Technology", 3.0e12, "nvidia.com"),
+    MarketMapStock("META", "Meta", "Social apps and Reality Labs platforms.", "Communication Services", 1.4e12, "meta.com"),
+    MarketMapStock("TSLA", "Tesla", "Electric vehicles, energy storage, and autonomy.", "Consumer Discretionary", 9.0e11, "tesla.com"),
+    MarketMapStock("BRK-B", "Berkshire Hathaway", "Diversified holding company led by Warren Buffett.", "Financials", 9.5e11, "berkshirehathaway.com"),
+    MarketMapStock("AVGO", "Broadcom", "Semiconductor and infrastructure software.", "Technology", 1.2e12, "broadcom.com"),
+    MarketMapStock("JPM", "JPMorgan Chase", "Global banking and investment services.", "Financials", 6.5e11, "jpmorganchase.com"),
+    MarketMapStock("V", "Visa", "Global payments network.", "Financials", 5.8e11, "visa.com"),
+    MarketMapStock("MA", "Mastercard", "Card payments and commerce solutions.", "Financials", 4.6e11, "mastercard.com"),
+    MarketMapStock("LLY", "Eli Lilly", "Pharmaceuticals focused on diabetes and obesity.", "Health Care", 7.5e11, "lilly.com"),
+    MarketMapStock("JNJ", "Johnson & Johnson", "Pharma, medtech, and consumer health.", "Health Care", 3.8e11, "jnj.com"),
+    MarketMapStock("WMT", "Walmart", "Global discount retail and grocery.", "Consumer Staples", 6.5e11, "walmart.com"),
+    MarketMapStock("XOM", "Exxon Mobil", "Integrated oil and gas major.", "Energy", 4.8e11, "exxonmobil.com"),
+    MarketMapStock("UNH", "UnitedHealth", "Health insurance and care services.", "Health Care", 4.5e11, "unitedhealthgroup.com"),
+    MarketMapStock("HD", "Home Depot", "Home improvement retail.", "Consumer Discretionary", 3.8e11, "homedepot.com"),
+    MarketMapStock("PG", "Procter & Gamble", "Household and personal-care brands.", "Consumer Staples", 3.9e11, "pg.com"),
+    MarketMapStock("COST", "Costco", "Membership warehouse retail.", "Consumer Staples", 4.0e11, "costco.com"),
+    MarketMapStock("NFLX", "Netflix", "Global streaming entertainment.", "Communication Services", 3.5e11, "netflix.com"),
+    MarketMapStock("AMD", "AMD", "CPUs, GPUs, and data-center chips.", "Technology", 2.4e11, "amd.com"),
+    MarketMapStock("CRM", "Salesforce", "Cloud CRM and enterprise software.", "Technology", 2.8e11, "salesforce.com"),
+    MarketMapStock("ORCL", "Oracle", "Databases, cloud apps, and infrastructure.", "Technology", 4.2e11, "oracle.com"),
+    MarketMapStock("BAC", "Bank of America", "US consumer and commercial banking.", "Financials", 3.3e11, "bankofamerica.com"),
+    MarketMapStock("KO", "Coca-Cola", "Global beverage brands.", "Consumer Staples", 2.9e11, "coca-colacompany.com"),
+    MarketMapStock("PEP", "PepsiCo", "Beverages and snack foods.", "Consumer Staples", 2.3e11, "pepsico.com"),
+    MarketMapStock("DIS", "Disney", "Media, parks, and streaming.", "Communication Services", 2.0e11, "thewaltdisneycompany.com"),
+    MarketMapStock("INTC", "Intel", "CPUs and foundry semiconductor business.", "Technology", 1.0e11, "intel.com"),
+    MarketMapStock("CSCO", "Cisco", "Networking hardware and security.", "Technology", 2.2e11, "cisco.com"),
+    MarketMapStock("ADBE", "Adobe", "Creative and document cloud software.", "Technology", 2.3e11, "adobe.com"),
+    MarketMapStock("QCOM", "QUALCOMM", "Mobile chipsets and wireless IP.", "Technology", 1.9e11, "qualcomm.com"),
+    MarketMapStock("MRK", "Merck", "Vaccines and specialty pharmaceuticals.", "Health Care", 2.7e11, "merck.com"),
+    MarketMapStock("ABBV", "AbbVie", "Immunology and specialty drugs.", "Health Care", 3.2e11, "abbvie.com"),
+    MarketMapStock("CVX", "Chevron", "Integrated energy producer.", "Energy", 2.8e11, "chevron.com"),
+    MarketMapStock("TMO", "Thermo Fisher", "Life-science tools and diagnostics.", "Health Care", 2.1e11, "thermofisher.com"),
+    MarketMapStock("ACN", "Accenture", "IT consulting and managed services.", "Information Technology", 2.1e11, "accenture.com"),
+    MarketMapStock("MCD", "McDonald's", "Global quick-service restaurants.", "Consumer Discretionary", 2.1e11, "mcdonalds.com"),
+    MarketMapStock("IBM", "IBM", "Hybrid cloud and enterprise IT.", "Technology", 2.0e11, "ibm.com"),
+    MarketMapStock("GE", "GE Aerospace", "Jet engines and aerospace systems.", "Industrials", 2.0e11, "geaerospace.com"),
+    MarketMapStock("CAT", "Caterpillar", "Construction and mining equipment.", "Industrials", 1.8e11, "caterpillar.com"),
+    MarketMapStock("AXP", "American Express", "Premium cards and payment services.", "Financials", 1.9e11, "americanexpress.com"),
+    MarketMapStock("TXN", "Texas Instruments", "Analog and embedded semiconductors.", "Technology", 1.7e11, "ti.com"),
+    MarketMapStock("AMAT", "Applied Materials", "Semiconductor manufacturing equipment.", "Technology", 1.6e11, "appliedmaterials.com"),
+    MarketMapStock("NOW", "ServiceNow", "Enterprise workflow cloud platform.", "Technology", 1.9e11, "servicenow.com"),
+    MarketMapStock("ISRG", "Intuitive Surgical", "Robotic-assisted surgery systems.", "Health Care", 1.7e11, "intuitive.com"),
+    MarketMapStock("UBER", "Uber", "Mobility and delivery marketplace.", "Consumer Discretionary", 1.5e11, "uber.com"),
+    MarketMapStock("BKNG", "Booking", "Online travel booking platforms.", "Consumer Discretionary", 1.5e11, "bookingholdings.com"),
+    MarketMapStock("PFE", "Pfizer", "Vaccines and specialty medicines.", "Health Care", 1.5e11, "pfizer.com"),
+    MarketMapStock("T", "AT&T", "Wireless, broadband, and media.", "Communication Services", 1.5e11, "att.com"),
+    MarketMapStock("VZ", "Verizon", "US wireless and broadband.", "Communication Services", 1.7e11, "verizon.com"),
+    MarketMapStock("CMCSA", "Comcast", "Cable broadband and media.", "Communication Services", 1.5e11, "corporate.comcast.com"),
+    MarketMapStock("NKE", "Nike", "Athletic footwear and apparel.", "Consumer Discretionary", 1.3e11, "nike.com"),
+    MarketMapStock("BA", "Boeing", "Commercial aircraft and defense.", "Industrials", 1.2e11, "boeing.com"),
+    MarketMapStock("SPGI", "S&P Global", "Ratings, indices, and market data.", "Financials", 1.5e11, "spglobal.com"),
+    MarketMapStock("BLK", "BlackRock", "Global asset management.", "Financials", 1.4e11, "blackrock.com"),
+    MarketMapStock("MS", "Morgan Stanley", "Investment banking and wealth management.", "Financials", 1.7e11, "morganstanley.com"),
+    MarketMapStock("GS", "Goldman Sachs", "Investment banking and trading.", "Financials", 1.6e11, "goldmansachs.com"),
+    MarketMapStock("SCHW", "Charles Schwab", "Brokerage and retail banking.", "Financials", 1.3e11, "schwab.com"),
+    MarketMapStock("C", "Citigroup", "Global consumer and institutional bank.", "Financials", 1.2e11, "citigroup.com"),
+    MarketMapStock("WFC", "Wells Fargo", "US retail and commercial banking.", "Financials", 2.2e11, "wellsfargo.com"),
+    MarketMapStock("LOW", "Lowe's", "Home improvement retail.", "Consumer Discretionary", 1.4e11, "lowes.com"),
+    MarketMapStock("SBUX", "Starbucks", "Global coffee retail.", "Consumer Discretionary", 1.0e11, "starbucks.com"),
+    MarketMapStock("MDT", "Medtronic", "Medical devices and therapies.", "Health Care", 1.1e11, "medtronic.com"),
+    MarketMapStock("GILD", "Gilead", "Antiviral and oncology drugs.", "Health Care", 1.1e11, "gilead.com"),
+    MarketMapStock("AMGN", "Amgen", "Biotechnology and specialty drugs.", "Health Care", 1.6e11, "amgen.com"),
+    MarketMapStock("BMY", "Bristol Myers", "Oncology and immunology drugs.", "Health Care", 1.0e11, "bms.com"),
+    MarketMapStock("HON", "Honeywell", "Aerospace and industrial automation.", "Industrials", 1.4e11, "honeywell.com"),
+    MarketMapStock("UNP", "Union Pacific", "US freight rail network.", "Industrials", 1.4e11, "up.com"),
+    MarketMapStock("RTX", "RTX", "Aerospace and defense systems.", "Industrials", 1.6e11, "rtx.com"),
+    MarketMapStock("DE", "Deere", "Agricultural and construction equipment.", "Industrials", 1.1e11, "deere.com"),
+    MarketMapStock("LMT", "Lockheed Martin", "Defense aerospace and systems.", "Industrials", 1.2e11, "lockheedmartin.com"),
+    MarketMapStock("PLD", "Prologis", "Logistics real-estate REIT.", "Real Estate", 1.0e11, "prologis.com"),
+    MarketMapStock("ADI", "Analog Devices", "High-performance analog chips.", "Technology", 1.1e11, "analog.com"),
+    MarketMapStock("PANW", "Palo Alto Networks", "Cybersecurity platforms.", "Technology", 1.1e11, "paloaltonetworks.com"),
+    MarketMapStock("INTU", "Intuit", "TurboTax, QuickBooks, and Credit Karma.", "Technology", 1.7e11, "intuit.com"),
+    MarketMapStock("MU", "Micron", "Memory and storage semiconductors.", "Technology", 1.2e11, "micron.com"),
+    MarketMapStock("LRCX", "Lam Research", "Wafer-fabrication equipment.", "Technology", 1.1e11, "lamresearch.com"),
+    MarketMapStock("KLAC", "KLA", "Process-control semiconductor tools.", "Technology", 1.0e11, "kla.com"),
+    MarketMapStock("SNPS", "Synopsys", "Chip design automation software.", "Technology", 8.0e10, "synopsys.com"),
+    MarketMapStock("CDNS", "Cadence", "Electronic design automation.", "Technology", 7.5e10, "cadence.com"),
+    MarketMapStock("REGN", "Regeneron", "Antibody and genetic medicines.", "Health Care", 1.0e11, "regeneron.com"),
+    MarketMapStock("VRTX", "Vertex", "Cystic fibrosis and specialty drugs.", "Health Care", 1.2e11, "vrtx.com"),
+    MarketMapStock("ADP", "ADP", "Payroll and HR software services.", "Industrials", 1.1e11, "adp.com"),
+    MarketMapStock("FI", "Fiserv", "Payments and financial technology.", "Financials", 9.0e10, "fiserv.com"),
+    MarketMapStock("SYK", "Stryker", "Orthopedics and medical devices.", "Health Care", 1.3e11, "stryker.com"),
+    MarketMapStock("TJX", "TJX", "Off-price apparel retail (TJ Maxx).", "Consumer Discretionary", 1.3e11, "tjx.com"),
+    MarketMapStock("MMC", "Marsh McLennan", "Insurance brokerage and consulting.", "Financials", 1.1e11, "marshmclennan.com"),
+    MarketMapStock("CB", "Chubb", "Property and casualty insurance.", "Financials", 1.1e11, "chubb.com"),
+    MarketMapStock("SO", "Southern Company", "Regulated electric utilities.", "Utilities", 9.0e10, "southerncompany.com"),
+    MarketMapStock("DUK", "Duke Energy", "Electric and gas utility.", "Utilities", 8.5e10, "duke-energy.com"),
+    MarketMapStock("NEE", "NextEra Energy", "Utilities and renewable power.", "Utilities", 1.5e11, "nexteraenergy.com"),
+    MarketMapStock("DHR", "Danaher", "Life-science and diagnostics tools.", "Health Care", 1.8e11, "danaher.com"),
+    MarketMapStock("ELV", "Elevance Health", "Health benefits (formerly Anthem).", "Health Care", 1.1e11, "elevancehealth.com"),
+    MarketMapStock("CI", "Cigna", "Health services and insurance.", "Health Care", 9.0e10, "cigna.com"),
+    MarketMapStock("EQIX", "Equinix", "Global data-center REIT.", "Real Estate", 8.0e10, "equinix.com"),
+    MarketMapStock("SHW", "Sherwin-Williams", "Paints and coatings.", "Materials", 8.5e10, "sherwin-williams.com"),
+    MarketMapStock("MO", "Altria", "US tobacco products.", "Consumer Staples", 8.5e10, "altria.com"),
+    MarketMapStock("PM", "Philip Morris", "International tobacco and smoke-free products.", "Consumer Staples", 1.8e11, "pmi.com"),
+    MarketMapStock("BX", "Blackstone", "Alternative asset management.", "Financials", 1.7e11, "blackstone.com"),
+    MarketMapStock("KKR", "KKR", "Private equity and alternatives.", "Financials", 1.1e11, "kkr.com"),
+    MarketMapStock("APO", "Apollo", "Credit and alternative investments.", "Financials", 7.5e10, "apollo.com"),
+    MarketMapStock("COIN", "Coinbase", "Crypto exchange and custody.", "Financials", 5.5e10, "coinbase.com"),
+    MarketMapStock("SHOP", "Shopify", "E-commerce software platform.", "Information Technology", 1.2e11, "shopify.com"),
+    MarketMapStock("SQ", "Block", "Cash App and Square merchant tools.", "Financials", 4.5e10, "block.xyz"),
+    MarketMapStock("PYPL", "PayPal", "Digital wallets and online payments.", "Financials", 7.0e10, "paypal.com"),
+    MarketMapStock("ABNB", "Airbnb", "Short-term lodging marketplace.", "Consumer Discretionary", 8.0e10, "airbnb.com"),
+    MarketMapStock("SNOW", "Snowflake", "Cloud data platform.", "Technology", 5.5e10, "snowflake.com"),
+    MarketMapStock("CRWD", "CrowdStrike", "Endpoint cybersecurity.", "Technology", 7.5e10, "crowdstrike.com"),
+    MarketMapStock("NET", "Cloudflare", "CDN, security, and edge compute.", "Technology", 4.0e10, "cloudflare.com"),
+    MarketMapStock("DDOG", "Datadog", "Observability and monitoring cloud.", "Technology", 4.5e10, "datadoghq.com"),
+    MarketMapStock("ZM", "Zoom", "Video communications software.", "Technology", 2.5e10, "zoom.us"),
+    MarketMapStock("ROKU", "Roku", "Streaming devices and TV OS.", "Communication Services", 1.2e10, "roku.com"),
+    MarketMapStock("RIVN", "Rivian", "Electric adventure vehicles.", "Consumer Discretionary", 1.3e10, "rivian.com"),
+    MarketMapStock("LCID", "Lucid", "Luxury electric vehicles.", "Consumer Discretionary", 7.0e9, "lucidmotors.com"),
+    MarketMapStock("PLTR", "Palantir", "Data analytics for government and enterprise.", "Technology", 1.5e11, "palantir.com"),
+    MarketMapStock("ARM", "Arm", "CPU IP licensing for chips.", "Technology", 1.4e11, "arm.com"),
+    MarketMapStock("SMCI", "Super Micro", "AI and high-density servers.", "Technology", 3.0e10, "supermicro.com"),
+    MarketMapStock("MAR", "Marriott", "Global hotel operator.", "Consumer Discretionary", 7.0e10, "marriott.com"),
+    MarketMapStock("HLT", "Hilton", "Global hotel brands.", "Consumer Discretionary", 6.0e10, "hilton.com"),
+    MarketMapStock("GM", "General Motors", "Autos, EVs, and Cruise autonomy.", "Consumer Discretionary", 5.5e10, "gm.com"),
+    MarketMapStock("F", "Ford", "Autos, trucks, and EVs.", "Consumer Discretionary", 4.5e10, "ford.com"),
+    MarketMapStock("DAL", "Delta", "US major airline.", "Industrials", 3.5e10, "delta.com"),
+    MarketMapStock("UAL", "United Airlines", "Global passenger airline.", "Industrials", 2.5e10, "united.com"),
+    MarketMapStock("AAL", "American Airlines", "US major airline.", "Industrials", 9.0e9, "aa.com"),
+    MarketMapStock("CSX", "CSX", "Eastern US freight railroad.", "Industrials", 6.5e10, "csx.com"),
+)
+
+
+def marketmap_stocks() -> tuple[MarketMapStock, ...]:
+    return MARKETMAP_STOCKS

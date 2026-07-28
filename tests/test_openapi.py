@@ -8,12 +8,12 @@ def test_openapi_contains_core_routes() -> None:
     assert "/api/v1/historical/{ticker}" in paths
     assert "/api/v1/charts/{ticker}" in paths
     assert "/api/v1/symbols" in paths
+    assert "/api/v1/marketmap" in paths
     assert "/api/v1/quotes/{symbol}" in paths
     assert "/api/v1/market/status" in paths
     assert "/api/ws-tester" in paths
     assert "/api/v1/forex/symbols" not in paths
     assert "/api/v1/crypto/symbols" not in paths
-    assert "/api/v1/marketmap" not in paths
 
 
 def test_docs_are_mounted_under_api_prefix() -> None:
