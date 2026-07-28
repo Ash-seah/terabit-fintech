@@ -10,8 +10,11 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.symbols import (
+    DEFAULT_FOREX_EXCHANGE,
     DEFAULT_STOCK_EXCHANGE,
+    forex_catalog_payload,
     normalize_symbol,
+    sanitize_forex_upstream_list,
     symbols_by_asset_class,
 )
 from app.providers.yahoo import HistoricalDataNotFoundError, HistoricalProviderError
@@ -271,16 +274,25 @@ async def earnings_calendar(
 
 
 @market_router.get("/forex/symbols")
-async def forex_symbols() -> list[dict[str, str]]:
-    return [
-        {
-            "symbol": item.symbol,
-            "name": item.name,
-            "display_symbol": item.symbol.replace("-", "/"),
-            "asset_class": item.asset_class,
-        }
-        for item in symbols_by_asset_class("forex")
-    ]
+async def forex_symbols(request: Request) -> list[dict[str, str]]:
+    try:
+        payload = await _market(
+            request,
+            "forex-symbols",
+            "/forex/symbol",
+            {"exchange": DEFAULT_FOREX_EXCHANGE},
+            604_800,
+        )
+        cleaned = sanitize_forex_upstream_list(payload)
+        if len(cleaned) >= len(forex_catalog_payload()):
+            return cleaned
+        # Merge upstream + local catalog so majors/crosses/metals are always present.
+        by_symbol = {item["symbol"]: item for item in cleaned}
+        for item in forex_catalog_payload():
+            by_symbol.setdefault(item["symbol"], item)
+        return sorted(by_symbol.values(), key=lambda row: row["symbol"])
+    except Exception:
+        return forex_catalog_payload()
 
 
 @market_router.get("/crypto/symbols")
