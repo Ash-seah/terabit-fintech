@@ -39,23 +39,21 @@ class TradingViewHistoryResponse(BaseModel):
     bars: list[TradingViewBar]
 
 
-class MarketMapItem(BaseModel):
-    """Lean market-map card: name, ticker, price, change vs yesterday."""
+class SymbolCard(BaseModel):
+    """Category symbol card: name, description, price, change vs yesterday."""
 
     symbol: str
     name: str
-    asset_class: str
+    description: str
     price: float | None = None
-    previous_close: float | None = None
     change: float | None = None
     change_percent: float | None = None
-    timestamp: datetime | None = None
 
 
-class MarketMapResponse(BaseModel):
+class SymbolsResponse(BaseModel):
     asset_class: Literal["stocks", "crypto", "forex"]
     count: int
-    items: list[MarketMapItem]
+    items: list[SymbolCard]
 
 
 class Trade(BaseModel):

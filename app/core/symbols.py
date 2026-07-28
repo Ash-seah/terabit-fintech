@@ -23,9 +23,10 @@ class SymbolSpec:
 
 
 @dataclass(frozen=True, slots=True)
-class MarketMapEntry:
+class CatalogEntry:
     symbol: str
     name: str
+    description: str
     asset_class: str  # equity | crypto | forex
 
 
@@ -263,22 +264,41 @@ def symbols_by_asset_class(asset_class: str) -> tuple[SymbolSpec, ...]:
     return tuple(item for item in CURATED_SYMBOLS if item.asset_class == asset_class)
 
 
-def marketmap_universe(asset_class: AssetClassQuery) -> tuple[MarketMapEntry, ...]:
-    """Full market-map catalog for stocks, crypto, or forex."""
+def symbols_universe(asset_class: AssetClassQuery) -> tuple[CatalogEntry, ...]:
+    """Full catalog for stocks, crypto, or forex (names + descriptions)."""
     if asset_class == "stocks":
         return tuple(
-            MarketMapEntry(symbol=symbol, name=name, asset_class="equity")
+            CatalogEntry(
+                symbol=symbol,
+                name=name,
+                description=f"US-listed equity · {symbol}",
+                asset_class="equity",
+            )
             for symbol, name in STOCK_CATALOG
         )
     if asset_class == "crypto":
         return tuple(
-            MarketMapEntry(symbol=symbol, name=name, asset_class="crypto")
+            CatalogEntry(
+                symbol=symbol,
+                name=name,
+                description=f"Cryptocurrency · {symbol}",
+                asset_class="crypto",
+            )
             for symbol, name in CRYPTO_CATALOG
         )
     return tuple(
-        MarketMapEntry(symbol=symbol, name=name, asset_class="forex")
+        CatalogEntry(
+            symbol=symbol,
+            name=name,
+            description=f"FX pair · {symbol.replace('-', '/')}",
+            asset_class="forex",
+        )
         for symbol, name in FOREX_CATALOG
     )
+
+
+# Back-compat alias
+marketmap_universe = symbols_universe
 
 
 def forex_catalog_payload() -> list[dict[str, str]]:

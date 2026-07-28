@@ -26,7 +26,21 @@ class YahooFinanceProvider:
         return await asyncio.to_thread(self._quote_sync, symbol)
 
     async def quotes(self, symbols: tuple[str, ...]) -> dict[str, dict[str, Any]]:
-        return await asyncio.to_thread(self._quotes_sync, symbols)
+        if not symbols:
+            return {}
+        chunk_size = 25
+        chunks = [
+            symbols[offset : offset + chunk_size]
+            for offset in range(0, len(symbols), chunk_size)
+        ]
+        # Parallel chunks keep large universes under gateway timeouts.
+        parts = await asyncio.gather(
+            *[asyncio.to_thread(self._quotes_chunk_sync, chunk) for chunk in chunks]
+        )
+        merged: dict[str, dict[str, Any]] = {}
+        for part in parts:
+            merged.update(part)
+        return merged
 
     @staticmethod
     def _history_sync(symbol: str, period: str, interval: str) -> list[HistoricalPoint]:
@@ -81,7 +95,7 @@ class YahooFinanceProvider:
         if not symbols:
             return {}
         results: dict[str, dict[str, Any]] = {}
-        chunk_size = 40
+        chunk_size = 25
         for offset in range(0, len(symbols), chunk_size):
             results.update(cls._quotes_chunk_sync(symbols[offset : offset + chunk_size]))
         return results
@@ -89,19 +103,23 @@ class YahooFinanceProvider:
     @staticmethod
     def _quotes_chunk_sync(symbols: tuple[str, ...]) -> dict[str, dict[str, Any]]:
         yahoo_to_api = {yfinance_symbol_for(symbol): symbol for symbol in symbols}
-        yahoo_symbols = list(yahoo_to_api.keys())
+        yahoo_symbols = list(dict.fromkeys(yahoo_to_api.keys()))
         try:
             frame = yf.download(
                 tickers=yahoo_symbols,
-                period="5d",
+                period="2d",
                 interval="1d",
                 group_by="ticker",
                 auto_adjust=False,
                 threads=True,
                 progress=False,
             )
-        except Exception as exc:
-            raise HistoricalProviderError("Batch quote fetch failed") from exc
+        except Exception:
+            # Chunk failures should not kill the whole universe fetch.
+            return {}
+
+        if frame is None or getattr(frame, "empty", False):
+            return {}
 
         results: dict[str, dict[str, Any]] = {}
         now_ts = int(datetime.now(UTC).timestamp())
@@ -110,7 +128,8 @@ class YahooFinanceProvider:
                 if len(yahoo_symbols) == 1:
                     series = frame
                 else:
-                    if yahoo_symbol not in frame.columns.get_level_values(0):
+                    levels = frame.columns.get_level_values(0)
+                    if yahoo_symbol not in levels:
                         continue
                     series = frame[yahoo_symbol]
                 closes = series["Close"].dropna()

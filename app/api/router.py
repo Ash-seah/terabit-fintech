@@ -19,16 +19,16 @@ from app.schemas import (
     ErrorResponse,
     HeartbeatEvent,
     HistoricalResponse,
-    MarketMapResponse,
     MarketPayload,
     SubscribedEvent,
+    SymbolsResponse,
     TradingViewHistoryResponse,
 )
 from app.services.historical import HistoricalService
 from app.services.market import MarketDataService
-from app.services.marketmap import MarketMapService
 from app.services.quotes import QuoteService
 from app.services.streaming import ConnectionManager
+from app.services.symbols import SymbolsService
 
 router = APIRouter()
 historical_router = APIRouter(prefix="/api/v1", tags=["charts"])
@@ -52,8 +52,8 @@ def _market_service(request: Request) -> MarketDataService:
     return request.app.state.market_service  # type: ignore[no-any-return]
 
 
-def _marketmap_service(request: Request) -> MarketMapService:
-    return request.app.state.marketmap_service  # type: ignore[no-any-return]
+def _symbols_service(request: Request) -> SymbolsService:
+    return request.app.state.symbols_service  # type: ignore[no-any-return]
 
 
 def _quote_service(request: Request) -> QuoteService:
@@ -125,18 +125,18 @@ async def tradingview_chart(
 
 
 @market_router.get(
-    "/marketmap",
-    response_model=MarketMapResponse,
-    summary="Bulk market-map data (stocks, crypto, or forex)",
+    "/symbols",
+    response_model=SymbolsResponse,
+    summary="Category symbols with price and day change",
 )
-async def marketmap(
+async def symbols(
     request: Request,
     asset_class: Annotated[
         AssetClassQuery,
         Query(description="Market universe: stocks, crypto, or forex"),
     ],
-) -> MarketMapResponse:
-    return await _marketmap_service(request).get(asset_class)
+) -> SymbolsResponse:
+    return await _symbols_service(request).get(asset_class)
 
 
 @market_router.get("/quotes/{symbol}")
@@ -389,7 +389,7 @@ _WS_TESTER_HTML = """<!doctype html>
       Connects to <code>/ws/live</code>. Leave symbols empty for all curated streams
       (equities like <code>NVDA</code>, crypto like <code>BTC-USD</code>, FX like
       <code>EUR-USD</code>). Market map bulk data:
-      <code>/api/v1/marketmap?asset_class=stocks|crypto|forex</code>.
+      <code>/api/v1/symbols?asset_class=stocks|crypto|forex</code>.
     </p>
     <div class="row">
       <input id="symbols" placeholder="leave empty for all curated symbols" value="" />

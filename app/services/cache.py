@@ -28,6 +28,25 @@ class Cache:
         except RedisError:
             logger.exception("Redis write failed")
 
+    async def mget_json(self, keys: list[str]) -> list[Any | None]:
+        if not keys:
+            return []
+        try:
+            values = await self.redis.mget(keys)
+        except RedisError:
+            logger.exception("Redis mget failed")
+            return [None] * len(keys)
+        parsed: list[Any | None] = []
+        for value in values:
+            if value is None:
+                parsed.append(None)
+                continue
+            try:
+                parsed.append(orjson.loads(value))
+            except orjson.JSONDecodeError:
+                parsed.append(None)
+        return parsed
+
     @asynccontextmanager
     async def lock(self, key: str, lock_ttl: int = 20) -> AsyncIterator[None]:
         lock = self.redis.lock(f"lock:{key}", timeout=lock_ttl, blocking_timeout=5)

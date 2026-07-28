@@ -34,7 +34,7 @@ If the host proxies only `location /api` and `location /ws` (as on
 - ReDoc: `https://fintech.terabitventure.com/api/redoc`
 - WebSocket tester: `https://fintech.terabitventure.com/api/ws-tester`
 - Live WebSocket: `wss://fintech.terabitventure.com/ws/live`
-- Market map: `https://fintech.terabitventure.com/api/v1/marketmap?asset_class=stocks`
+- Symbols: `https://fintech.terabitventure.com/api/v1/symbols?asset_class=stocks`
 - TradingView OHLC: `https://fintech.terabitventure.com/api/v1/charts/AAPL`
 
 Do not bind AsyncAPI `:8080` to `0.0.0.0` on a public VPS; scanners will hit it.
@@ -46,7 +46,7 @@ deploying.
 
 ## REST endpoints
 
-- `GET /api/v1/marketmap?asset_class=stocks|crypto|forex` — bulk market-map cards (name, ticker, price, day change)
+- `GET /api/v1/symbols?asset_class=stocks|crypto|forex` — name, description, price, day change
 - `GET /api/v1/charts/{ticker}?interval=1d` — TradingView Lightweight Charts OHLC
 - `GET /api/v1/historical/{ticker}?interval=1d` — same bars as structured points (defaults to deepest available history)
 - `GET /api/v1/quotes/{symbol}`
@@ -61,11 +61,12 @@ deploying.
 - `GET /api/v1/calendars/earnings` — defaults to the next 30 days
 
 Use `asset_class=stocks` for equities (e.g. `NVDA`), `crypto` for coins (e.g. `BTC-USD`), and `forex` for FX pairs (e.g. `EUR-USD`).
+Prices refresh in the background; the first response after deploy may have null prices for a few seconds.
 
 Market payloads are returned unwrapped (no provider/resource envelope). Entitlement
 failures are `403`; quota exhaustion `429`; upstream outages `503`.
 
-Quota strategy: market map and quotes use Yahoo + live WebSocket cache first. Finnhub
+Quota strategy: symbols and quotes use Yahoo + live WebSocket cache first. Finnhub
 REST is reserved for fundamentals/news/calendars/search, soft-cached aggressively
 (stale responses are served while refreshing), and capped at
 `FINNHUB_REST_CALLS_PER_MINUTE` (default 20).
