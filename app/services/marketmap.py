@@ -4,7 +4,7 @@ from typing import Any, Literal
 
 from app.core.marketmap_stocks import MarketMapStock, marketmap_stocks
 from app.providers.yahoo import HistoricalProviderError, YahooFinanceProvider
-from app.schemas import MarketMapItem, MarketMapResponse
+from app.schemas import MarketMapItem, MarketMapResponse, MarketMapSector
 from app.services.cache import Cache
 
 logger = logging.getLogger(__name__)
@@ -12,6 +12,21 @@ logger = logging.getLogger(__name__)
 _SOFT_TTL = 86_400
 _FRESH_MARKER = "1"
 _CACHE_KEY = "marketmap:stocks:v1"
+
+# Lower index = more important for heatmap layout.
+_SECTOR_PRIORITY: dict[str, int] = {
+    "Technology": 0,
+    "Financials": 1,
+    "Health Care": 2,
+    "Consumer Discretionary": 3,
+    "Communication Services": 4,
+    "Industrials": 5,
+    "Consumer Staples": 6,
+    "Energy": 7,
+    "Utilities": 8,
+    "Real Estate": 9,
+    "Materials": 10,
+}
 
 SortField = Literal[
     "change",
@@ -59,15 +74,12 @@ class MarketMapService:
             self._build_item(stock, prices.get(stock.symbol), latest.get(stock.symbol))
             for stock in universe
         ]
-        items = _sort_items(items, sorted_by, resolved_order)
-        if limit is not None:
-            items = items[: max(1, min(limit, 500))]
-
+        sectors = _group_by_sector(items, sorted_by, resolved_order, limit)
         return MarketMapResponse(
-            count=len(items),
+            count=sum(sector.count for sector in sectors),
             sorted_by=sorted_by,
             order=resolved_order,
-            items=items,
+            sectors=sectors,
         )
 
     async def _price_map(self) -> dict[str, dict[str, Any]]:
@@ -190,6 +202,43 @@ def _sort_items(
     missing = [item for key, item in keyed if key is None]
     present.sort(key=lambda row: row[0], reverse=reverse)  # type: ignore[arg-type]
     return [item for _, item in present] + missing
+
+
+def _group_by_sector(
+    items: list[MarketMapItem],
+    sorted_by: SortField,
+    order: SortOrder,
+    limit: int | None,
+) -> list[MarketMapSector]:
+    buckets: dict[str, list[MarketMapItem]] = {}
+    for item in items:
+        buckets.setdefault(item.sector, []).append(item)
+
+    sectors: list[MarketMapSector] = []
+    per_sector_limit = max(1, min(limit, 500)) if limit is not None else None
+    for sector_name, bucket in buckets.items():
+        ranked = _sort_items(bucket, sorted_by, order)
+        if per_sector_limit is not None:
+            ranked = ranked[:per_sector_limit]
+        sectors.append(
+            MarketMapSector(
+                sector=sector_name,
+                count=len(ranked),
+                market_cap=sum(item.market_cap for item in ranked),
+                items=ranked,
+            )
+        )
+
+    # Important sectors first, then denser / larger-cap groups.
+    sectors.sort(
+        key=lambda sector: (
+            _SECTOR_PRIORITY.get(sector.sector, 99),
+            -sector.count,
+            -sector.market_cap,
+            sector.sector,
+        )
+    )
+    return sectors
 
 
 def _float(value: Any) -> float | None:

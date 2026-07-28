@@ -1,6 +1,6 @@
 from app.core.marketmap_stocks import marketmap_stocks
 from app.schemas import MarketMapItem
-from app.services.marketmap import _sort_items
+from app.services.marketmap import _group_by_sector, _sort_items
 
 
 def test_marketmap_catalog_has_logos_and_blurbs() -> None:
@@ -23,7 +23,7 @@ def test_marketmap_sort_by_change_percent() -> None:
             name="A",
             description="a",
             logo="https://example.com/a",
-            sector="Tech",
+            sector="Technology",
             market_cap=1e11,
             price=10,
             change=1,
@@ -34,7 +34,7 @@ def test_marketmap_sort_by_change_percent() -> None:
             name="B",
             description="b",
             logo="https://example.com/b",
-            sector="Tech",
+            sector="Technology",
             market_cap=2e11,
             price=20,
             change=-4,
@@ -56,3 +56,60 @@ def test_marketmap_sort_by_change_percent() -> None:
     assert [item.symbol for item in ranked] == ["A", "B", "C"]
     movers = _sort_items(items, "volatility", "desc")
     assert movers[0].symbol == "B"
+
+
+def test_marketmap_groups_sectors_by_importance_and_size() -> None:
+    items = [
+        MarketMapItem(
+            symbol="XOM",
+            name="Exxon",
+            description="oil",
+            logo="https://example.com/xom",
+            sector="Energy",
+            market_cap=5e11,
+            price=100,
+            change=1,
+            change_percent=1.0,
+        ),
+        MarketMapItem(
+            symbol="AAPL",
+            name="Apple",
+            description="tech",
+            logo="https://example.com/aapl",
+            sector="Technology",
+            market_cap=3e12,
+            price=190,
+            change=2,
+            change_percent=1.1,
+        ),
+        MarketMapItem(
+            symbol="MSFT",
+            name="Microsoft",
+            description="tech",
+            logo="https://example.com/msft",
+            sector="Technology",
+            market_cap=3e12,
+            price=420,
+            change=-3,
+            change_percent=-0.7,
+        ),
+        MarketMapItem(
+            symbol="JPM",
+            name="JPMorgan",
+            description="bank",
+            logo="https://example.com/jpm",
+            sector="Financials",
+            market_cap=6e11,
+            price=200,
+            change=1,
+            change_percent=0.5,
+        ),
+    ]
+    sectors = _group_by_sector(items, "change_percent", "desc", limit=None)
+    assert [sector.sector for sector in sectors] == [
+        "Technology",
+        "Financials",
+        "Energy",
+    ]
+    assert sectors[0].count == 2
+    assert [item.symbol for item in sectors[0].items] == ["AAPL", "MSFT"]

@@ -202,7 +202,7 @@ async def marketmap(
     ] = None,
     limit: Annotated[
         int | None,
-        Query(ge=1, le=500, description="Optional top-N after sort"),
+        Query(ge=1, le=500, description="Optional top-N per sector after sort"),
     ] = None,
 ) -> MarketMapResponse:
     return await _marketmap_service(request).get(

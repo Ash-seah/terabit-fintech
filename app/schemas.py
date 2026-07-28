@@ -75,11 +75,18 @@ class MarketMapItem(BaseModel):
     change_percent: float | None = None
 
 
+class MarketMapSector(BaseModel):
+    sector: str
+    count: int
+    market_cap: float
+    items: list[MarketMapItem]
+
+
 class MarketMapResponse(BaseModel):
     count: int
     sorted_by: str
     order: Literal["asc", "desc"]
-    items: list[MarketMapItem]
+    sectors: list[MarketMapSector]
 
 
 class Trade(BaseModel):
