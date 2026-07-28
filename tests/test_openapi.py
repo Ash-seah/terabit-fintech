@@ -9,6 +9,9 @@ def test_openapi_contains_core_routes() -> None:
     assert "/api/v1/charts/{ticker}" in paths
     assert "/api/v1/symbols" in paths
     assert "/api/v1/marketmap" in paths
+    assert "/api/v1/marketmap/stocks" in paths
+    assert "/api/v1/marketmap/forex" in paths
+    assert "/api/v1/marketmap/crypto" in paths
     assert "/api/v1/quotes/{symbol}" in paths
     assert "/api/v1/market/status" in paths
     assert "/api/ws-tester" in paths

@@ -190,9 +190,14 @@ async def symbols(
 @market_router.get(
     "/marketmap",
     response_model=MarketMapResponse,
+    summary="US stocks market-map (alias of /marketmap/stocks)",
+)
+@market_router.get(
+    "/marketmap/stocks",
+    response_model=MarketMapResponse,
     summary="US stocks market-map tiles (logos, sector, day change)",
 )
-async def marketmap(
+async def marketmap_stocks_endpoint(
     request: Request,
     sorted_by: Annotated[
         Literal[
@@ -216,6 +221,67 @@ async def marketmap(
     ] = None,
 ) -> MarketMapResponse:
     return await _marketmap_service(request).get(
+        "stocks",
+        sorted_by=sorted_by,
+        order=order,
+        limit=limit,
+    )
+
+
+@market_router.get(
+    "/marketmap/forex",
+    response_model=MarketMapResponse,
+    summary="Forex market-map tiles (majors, crosses, metals)",
+)
+async def marketmap_forex_endpoint(
+    request: Request,
+    sorted_by: Annotated[
+        Literal[
+            "change",
+            "change_percent",
+            "volatility",
+            "market_cap",
+            "price",
+            "name",
+            "symbol",
+        ],
+        Query(description="Default change_percent"),
+    ] = "change_percent",
+    order: Annotated[Literal["asc", "desc"] | None, Query()] = None,
+    limit: Annotated[int | None, Query(ge=1, le=500)] = None,
+) -> MarketMapResponse:
+    return await _marketmap_service(request).get(
+        "forex",
+        sorted_by=sorted_by,
+        order=order,
+        limit=limit,
+    )
+
+
+@market_router.get(
+    "/marketmap/crypto",
+    response_model=MarketMapResponse,
+    summary="Crypto market-map tiles (logos, category, day change)",
+)
+async def marketmap_crypto_endpoint(
+    request: Request,
+    sorted_by: Annotated[
+        Literal[
+            "change",
+            "change_percent",
+            "volatility",
+            "market_cap",
+            "price",
+            "name",
+            "symbol",
+        ],
+        Query(description="Default change_percent"),
+    ] = "change_percent",
+    order: Annotated[Literal["asc", "desc"] | None, Query()] = None,
+    limit: Annotated[int | None, Query(ge=1, le=500)] = None,
+) -> MarketMapResponse:
+    return await _marketmap_service(request).get(
+        "crypto",
         sorted_by=sorted_by,
         order=order,
         limit=limit,

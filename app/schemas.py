@@ -66,7 +66,7 @@ class SymbolsResponse(BaseModel):
 
 
 class MarketMapItem(BaseModel):
-    """Lean heatmap tile for US stocks."""
+    """Heatmap tile — same shape for stocks, forex, and crypto."""
 
     symbol: str
     name: str
@@ -87,6 +87,7 @@ class MarketMapSector(BaseModel):
 
 
 class MarketMapResponse(BaseModel):
+    asset_class: Literal["stocks", "forex", "crypto"]
     count: int
     sorted_by: str
     order: Literal["asc", "desc"]

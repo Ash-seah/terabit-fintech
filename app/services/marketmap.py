@@ -1,8 +1,11 @@
 import asyncio
 import logging
-from typing import Any, Literal
+from collections.abc import Callable
+from typing import Any, Literal, Protocol
 
-from app.core.marketmap_stocks import MarketMapStock, marketmap_stocks
+from app.core.marketmap_crypto import marketmap_crypto
+from app.core.marketmap_forex import marketmap_forex
+from app.core.marketmap_stocks import marketmap_stocks
 from app.providers.yahoo import HistoricalProviderError, YahooFinanceProvider
 from app.schemas import MarketMapItem, MarketMapResponse, MarketMapSector
 from app.services.cache import Cache
@@ -11,22 +14,8 @@ logger = logging.getLogger(__name__)
 
 _SOFT_TTL = 86_400
 _FRESH_MARKER = "1"
-_CACHE_KEY = "marketmap:stocks:v1"
 
-# Lower index = more important for heatmap layout.
-_SECTOR_PRIORITY: dict[str, int] = {
-    "Technology": 0,
-    "Financials": 1,
-    "Health Care": 2,
-    "Consumer Discretionary": 3,
-    "Communication Services": 4,
-    "Industrials": 5,
-    "Consumer Staples": 6,
-    "Energy": 7,
-    "Utilities": 8,
-    "Real Estate": 9,
-    "Materials": 10,
-}
+MarketMapClass = Literal["stocks", "forex", "crypto"]
 
 SortField = Literal[
     "change",
@@ -39,9 +28,70 @@ SortField = Literal[
 ]
 SortOrder = Literal["asc", "desc"]
 
+_SECTOR_PRIORITY: dict[MarketMapClass, dict[str, int]] = {
+    "stocks": {
+        "Technology": 0,
+        "Financials": 1,
+        "Health Care": 2,
+        "Consumer Discretionary": 3,
+        "Communication Services": 4,
+        "Industrials": 5,
+        "Consumer Staples": 6,
+        "Energy": 7,
+        "Utilities": 8,
+        "Real Estate": 9,
+        "Materials": 10,
+    },
+    "forex": {
+        "Majors": 0,
+        "Metals": 1,
+        "Minor Crosses": 2,
+        "Exotics": 3,
+    },
+    "crypto": {
+        "Bitcoin": 0,
+        "Ethereum": 1,
+        "Layer 1": 2,
+        "Stablecoin": 3,
+        "DeFi": 4,
+        "Infrastructure": 5,
+        "Meme": 6,
+    },
+}
+
+_CACHE_KEYS: dict[MarketMapClass, str] = {
+    "stocks": "marketmap:stocks:v1",
+    "forex": "marketmap:forex:v1",
+    "crypto": "marketmap:crypto:v1",
+}
+
+_SYMBOLS_FALLBACK: dict[MarketMapClass, str] = {
+    "stocks": "symbols:stocks:v2",
+    "forex": "symbols:forex:v2",
+    "crypto": "symbols:crypto:v2",
+}
+
+
+class _TileSource(Protocol):
+    symbol: str
+    name: str
+    description: str
+    sector: str
+    market_cap: float
+
+    @property
+    def logo(self) -> str: ...
+
+
+_UNIVERSE: dict[MarketMapClass, Callable[[], tuple[_TileSource, ...]]] = {
+    "stocks": marketmap_stocks,  # type: ignore[dict-item]
+    "forex": marketmap_forex,  # type: ignore[dict-item]
+    "crypto": marketmap_crypto,  # type: ignore[dict-item]
+}
+
 
 class MarketMapService:
-    """Lightweight stocks heatmap: static meta + cached Yahoo day change."""
+    """Heatmaps for stocks, forex, and crypto — shared response shape."""
 
     def __init__(
         self,
@@ -56,6 +106,7 @@ class MarketMapService:
 
     async def get(
         self,
+        asset_class: MarketMapClass = "stocks",
         *,
         sorted_by: SortField = "change_percent",
         order: SortOrder | None = None,
@@ -66,51 +117,56 @@ class MarketMapService:
             if sorted_by in {"change", "change_percent", "volatility", "market_cap", "price"}
             else "asc"
         )
-        prices = await self._price_map()
-        universe = marketmap_stocks()
-        latest = await self._latest_prices([stock.symbol for stock in universe])
+        universe = _UNIVERSE[asset_class]()
+        prices = await self._price_map(asset_class)
+        latest = await self._latest_prices([item.symbol for item in universe])
 
         items = [
-            self._build_item(stock, prices.get(stock.symbol), latest.get(stock.symbol))
-            for stock in universe
+            self._build_item(tile, prices.get(tile.symbol), latest.get(tile.symbol))
+            for tile in universe
         ]
-        sectors = _group_by_sector(items, sorted_by, resolved_order, limit)
+        sectors = _group_by_sector(items, sorted_by, resolved_order, limit, asset_class)
         return MarketMapResponse(
+            asset_class=asset_class,
             count=sum(sector.count for sector in sectors),
             sorted_by=sorted_by,
             order=resolved_order,
             sectors=sectors,
         )
 
-    async def _price_map(self) -> dict[str, dict[str, Any]]:
-        soft = await self.cache.get_json(_CACHE_KEY)
+    async def _price_map(self, asset_class: MarketMapClass) -> dict[str, dict[str, Any]]:
+        key = _CACHE_KEYS[asset_class]
+        soft = await self.cache.get_json(key)
         if soft is None:
-            # Fall back to symbols list cache so tiles still light up.
-            soft = await self.cache.get_json("symbols:stocks:v2")
-        if await self.cache.get_json(f"{_CACHE_KEY}:fresh") is None:
-            self._schedule_refresh()
+            soft = await self.cache.get_json(_SYMBOLS_FALLBACK[asset_class])
+        if await self.cache.get_json(f"{key}:fresh") is None:
+            self._schedule_refresh(asset_class)
         return _index_prices(soft)
 
-    def _schedule_refresh(self) -> None:
-        task = asyncio.create_task(self._refresh(), name="marketmap-refresh")
+    def _schedule_refresh(self, asset_class: MarketMapClass) -> None:
+        task = asyncio.create_task(
+            self._refresh(asset_class), name=f"marketmap-refresh-{asset_class}"
+        )
         self._refresh_tasks.add(task)
         task.add_done_callback(self._refresh_tasks.discard)
 
     def warm(self) -> None:
-        self._schedule_refresh()
+        for asset_class in ("stocks", "forex", "crypto"):
+            self._schedule_refresh(asset_class)
 
-    async def _refresh(self) -> None:
-        async with self.cache.lock(_CACHE_KEY, lock_ttl=120, blocking_timeout=0.05) as acquired:
+    async def _refresh(self, asset_class: MarketMapClass) -> None:
+        key = _CACHE_KEYS[asset_class]
+        async with self.cache.lock(key, lock_ttl=120, blocking_timeout=0.05) as acquired:
             if not acquired:
                 return
-            if await self.cache.get_json(f"{_CACHE_KEY}:fresh") is not None:
+            if await self.cache.get_json(f"{key}:fresh") is not None:
                 return
-            symbols = tuple(stock.symbol for stock in marketmap_stocks())
+            symbols = tuple(item.symbol for item in _UNIVERSE[asset_class]())
             quotes: dict[str, dict[str, Any]] = {}
             try:
                 quotes = await self.yahoo.quotes(symbols)
             except HistoricalProviderError:
-                logger.warning("Market map Yahoo quotes unavailable")
+                logger.warning("Market map Yahoo quotes unavailable for %s", asset_class)
             payload = {
                 "items": [
                     {
@@ -123,9 +179,9 @@ class MarketMapService:
                     for symbol in symbols
                 ]
             }
-            await self.cache.set_json(_CACHE_KEY, payload, _SOFT_TTL)
+            await self.cache.set_json(key, payload, _SOFT_TTL)
             if quotes:
-                await self.cache.set_json(f"{_CACHE_KEY}:fresh", _FRESH_MARKER, self.ttl)
+                await self.cache.set_json(f"{key}:fresh", _FRESH_MARKER, self.ttl)
 
     async def _latest_prices(self, symbols: list[str]) -> dict[str, dict[str, Any]]:
         values = await self.cache.mget_json([f"latest:{symbol}" for symbol in symbols])
@@ -137,7 +193,7 @@ class MarketMapService:
 
     def _build_item(
         self,
-        stock: MarketMapStock,
+        tile: _TileSource,
         cached: dict[str, Any] | None,
         live: dict[str, Any] | None,
     ) -> MarketMapItem:
@@ -154,12 +210,12 @@ class MarketMapService:
                 change_percent = (change / previous) * 100 if previous else change_percent
 
         return MarketMapItem(
-            symbol=stock.symbol,
-            name=stock.name,
-            description=stock.description,
-            logo=stock.logo,
-            sector=stock.sector,
-            market_cap=stock.market_cap,
+            symbol=tile.symbol,
+            name=tile.name,
+            description=tile.description,
+            logo=tile.logo,
+            sector=tile.sector,
+            market_cap=tile.market_cap,
             price=price,
             change=change,
             change_percent=change_percent,
@@ -211,11 +267,13 @@ def _group_by_sector(
     sorted_by: SortField,
     order: SortOrder,
     limit: int | None,
+    asset_class: MarketMapClass,
 ) -> list[MarketMapSector]:
     buckets: dict[str, list[MarketMapItem]] = {}
     for item in items:
         buckets.setdefault(item.sector, []).append(item)
 
+    priority = _SECTOR_PRIORITY[asset_class]
     sectors: list[MarketMapSector] = []
     per_sector_limit = max(1, min(limit, 500)) if limit is not None else None
     for sector_name, bucket in buckets.items():
@@ -231,10 +289,9 @@ def _group_by_sector(
             )
         )
 
-    # Important sectors first, then denser / larger-cap groups.
     sectors.sort(
         key=lambda sector: (
-            _SECTOR_PRIORITY.get(sector.sector, 99),
+            priority.get(sector.sector, 99),
             -sector.count,
             -sector.market_cap,
             sector.sector,

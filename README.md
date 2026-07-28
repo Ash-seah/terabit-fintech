@@ -52,11 +52,11 @@ deploying.
   - `order=asc|desc` (defaults to `desc` for price/change/volatility)
   - `page` + `limit` pagination (e.g. top 10 movers:
     `?asset_class=crypto&sorted_by=volatility&limit=10`)
-- `GET /api/v1/marketmap` — US stocks heatmap tiles grouped by sector
-  - response `sectors[]` ordered by importance then population (Technology, Financials, …)
-  - each sector has its own sorted `items[]` (name, logo, blurb, market cap, day change)
-  - `sorted_by=change_percent` (default), also `change|volatility|market_cap|price|name|symbol`
-  - optional `limit` caps items **per sector**
+- `GET /api/v1/marketmap` / `/marketmap/stocks` — US stocks heatmap by sector
+- `GET /api/v1/marketmap/forex` — FX heatmap (Majors → Metals → Crosses → Exotics)
+- `GET /api/v1/marketmap/crypto` — crypto heatmap (Bitcoin, Ethereum, Layer 1, …)
+  - shared tile shape: `symbol`, `name`, `logo`, `change_percent` (+ description, sector, market_cap, price, change)
+  - `sorted_by=change_percent` (default); optional `limit` per sector group
 - `GET /api/v1/charts/{ticker}?interval=1d` — TradingView Lightweight Charts OHLC
 - `GET /api/v1/historical/{ticker}?interval=1d` — same bars as structured points (defaults to deepest available history)
 - `GET /api/v1/quotes/{symbol}`
