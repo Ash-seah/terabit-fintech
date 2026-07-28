@@ -100,7 +100,9 @@ class MarketMapService:
         self._schedule_refresh()
 
     async def _refresh(self) -> None:
-        async with self.cache.lock(_CACHE_KEY, lock_ttl=120):
+        async with self.cache.lock(_CACHE_KEY, lock_ttl=120, blocking_timeout=0.05) as acquired:
+            if not acquired:
+                return
             if await self.cache.get_json(f"{_CACHE_KEY}:fresh") is not None:
                 return
             symbols = tuple(stock.symbol for stock in marketmap_stocks())

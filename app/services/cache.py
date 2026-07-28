@@ -48,16 +48,27 @@ class Cache:
         return parsed
 
     @asynccontextmanager
-    async def lock(self, key: str, lock_ttl: int = 20) -> AsyncIterator[None]:
-        lock = self.redis.lock(f"lock:{key}", timeout=lock_ttl, blocking_timeout=5)
+    async def lock(
+        self,
+        key: str,
+        lock_ttl: int = 20,
+        blocking_timeout: float = 5,
+    ) -> AsyncIterator[bool]:
+        """Yield True only when this caller holds the lock (no stampede)."""
+        lock = self.redis.lock(
+            f"lock:{key}",
+            timeout=lock_ttl,
+            blocking_timeout=blocking_timeout,
+        )
+        acquired = False
         try:
             acquired = bool(await lock.acquire())
         except RedisError:
             logger.exception("Redis lock failed")
-            yield
+            yield False
             return
         try:
-            yield
+            yield acquired
         finally:
             if acquired:
                 try:
@@ -75,7 +86,7 @@ class RedisTokenBucket:
     local state = redis.call('HMGET', KEYS[1], 'tokens', 'updated')
     local tokens = tonumber(state[1]) or capacity
     local updated = tonumber(state[2]) or now
-    tokens = math.min(capacity, tokens + math.max(0, now - updated) * refill_per_second)
+    tokens = math.min(capacity, tokens + (math.max(0, now - updated) * refill_per_second))
     local allowed = 0
     if tokens >= 1 then
         tokens = tokens - 1

@@ -97,9 +97,14 @@ async def historical(
             status_code=404, content={"detail": str(exc), "code": "historical_not_found"}
         )
     except HistoricalProviderError as exc:
+        code = (
+            "chart_loading"
+            if "still loading" in str(exc).lower()
+            else "historical_provider_unavailable"
+        )
         return JSONResponse(  # type: ignore[return-value]
             status_code=503,
-            content={"detail": str(exc), "code": "historical_provider_unavailable"},
+            content={"detail": str(exc), "code": code},
         )
 
 
@@ -124,9 +129,14 @@ async def tradingview_chart(
             status_code=404, content={"detail": str(exc), "code": "historical_not_found"}
         )
     except HistoricalProviderError as exc:
+        code = (
+            "chart_loading"
+            if "still loading" in str(exc).lower()
+            else "historical_provider_unavailable"
+        )
         return JSONResponse(  # type: ignore[return-value]
             status_code=503,
-            content={"detail": str(exc), "code": "historical_provider_unavailable"},
+            content={"detail": str(exc), "code": code},
         )
 
 

@@ -38,7 +38,7 @@ def test_sanitize_forex_upstream_strips_vendor_labels() -> None:
     assert all("OANDA" not in item["symbol"] for item in cleaned)
 
 
-def test_fx_yahoo_mapping() -> None:
-    assert yfinance_symbol_for("EUR-GBP") == "EURGBP=X"
-    assert yfinance_symbol_for("USD-JPY") == "JPY=X"
-    assert normalize_symbol("OANDA:EUR_GBP") == "EUR-GBP"
+def test_usd_pln_maps_to_yahoo_fx() -> None:
+    assert yfinance_symbol_for("USD-PLN") == "PLN=X"
+    assert yfinance_symbol_for("USD/PLN") == "PLN=X"
+    assert normalize_symbol("USD/PLN") == "USD-PLN"

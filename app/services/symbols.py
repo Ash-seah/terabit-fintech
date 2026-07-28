@@ -105,7 +105,9 @@ class SymbolsService:
         task.add_done_callback(self._refresh_tasks.discard)
 
     async def _refresh(self, asset_class: AssetClassQuery, key: str) -> None:
-        async with self.cache.lock(key, lock_ttl=120):
+        async with self.cache.lock(key, lock_ttl=120, blocking_timeout=0.05) as acquired:
+            if not acquired:
+                return
             if await self.cache.get_json(f"{key}:fresh") is not None:
                 return
             universe = symbols_universe(asset_class)

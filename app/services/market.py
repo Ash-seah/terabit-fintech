@@ -65,13 +65,19 @@ class MarketDataService:
                 refreshed = await self._try_refresh(key, path, params, ttl, retention)
                 return refreshed if refreshed is not None else payload
 
-        async with self.cache.lock(key):
+        async with self.cache.lock(key) as acquired:
             cached = await self.cache.get_json(key)
             if isinstance(cached, dict) and "payload" in cached and "fetched_at" in cached:
                 age = time.time() - float(cached["fetched_at"])
                 payload = cached["payload"]
                 if isinstance(payload, (dict, list)) and age <= ttl:
                     return payload
+
+            if not acquired:
+                stale = await self._stale_payload(key)
+                if stale is not None:
+                    return stale
+                raise FinnhubRateLimitError("Request quota is temporarily exhausted")
 
             if not await self.limiter.allow("ratelimit:finnhub:rest", self.quota_per_minute):
                 stale = await self._stale_payload(key)
@@ -101,7 +107,9 @@ class MarketDataService:
         ttl: int,
         retention: int,
     ) -> MarketPayload | None:
-        async with self.cache.lock(key, lock_ttl=5):
+        async with self.cache.lock(key, lock_ttl=5, blocking_timeout=0.05) as acquired:
+            if not acquired:
+                return None
             cached = await self.cache.get_json(key)
             if isinstance(cached, dict) and "payload" in cached and "fetched_at" in cached:
                 age = time.time() - float(cached["fetched_at"])

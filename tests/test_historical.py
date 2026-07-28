@@ -54,8 +54,10 @@ async def test_historical_cache_hit_skips_provider() -> None:
             return payload
 
         @asynccontextmanager
-        async def lock(self, key: str) -> AsyncIterator[None]:
-            yield
+        async def lock(
+            self, key: str, lock_ttl: int = 20, blocking_timeout: float = 5
+        ) -> AsyncIterator[bool]:
+            yield True
 
     class NeverProvider:
         async def history(self, symbol: str, period: str, interval: str) -> Any:

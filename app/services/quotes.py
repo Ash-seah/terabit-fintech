@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from datetime import UTC, datetime
 from typing import Any
@@ -48,10 +49,17 @@ class QuoteService:
         if base:
             return base
 
-        async with self.cache.lock(key):
+        async with self.cache.lock(key, lock_ttl=60, blocking_timeout=0.05) as acquired:
             cached = await self.cache.get_json(key)
             if isinstance(cached, dict):
                 return cached
+            if not acquired:
+                for _ in range(40):
+                    await asyncio.sleep(0.25)
+                    cached = await self.cache.get_json(key)
+                    if isinstance(cached, dict):
+                        return cached
+                raise HistoricalProviderError(f"Quote still loading for {symbol}")
             try:
                 quote = await self.yahoo.quote(symbol)
             except HistoricalProviderError:

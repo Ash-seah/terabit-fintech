@@ -48,23 +48,45 @@ class YahooFinanceProvider:
     @staticmethod
     def _history_sync(symbol: str, period: str, interval: str) -> list[HistoricalPoint]:
         try:
-            frame = yf.Ticker(symbol).history(
+            # download() is typically faster/more reliable than Ticker.history for FX.
+            frame = yf.download(
+                tickers=symbol,
                 period=period,
                 interval=interval,
                 auto_adjust=False,
-                actions=False,
-                raise_errors=True,
+                progress=False,
+                threads=False,
             )
+            if frame is None or frame.empty:
+                frame = yf.Ticker(symbol).history(
+                    period=period,
+                    interval=interval,
+                    auto_adjust=False,
+                    actions=False,
+                    raise_errors=True,
+                )
         except YFPricesMissingError as exc:
             raise HistoricalDataNotFoundError(f"No historical data found for {symbol}") from exc
+        except HistoricalDataNotFoundError:
+            raise
         except Exception as exc:
             raise HistoricalProviderError(f"Historical provider failed for {symbol}") from exc
-        if frame.empty:
+        if frame is None or frame.empty:
             raise HistoricalDataNotFoundError(f"No historical data found for {symbol}")
+
+        # yf.download single-ticker can use MultiIndex columns.
+        if hasattr(frame.columns, "nlevels") and frame.columns.nlevels > 1:
+            try:
+                frame = frame.droplevel(1, axis=1)
+            except Exception:
+                pass
 
         points: list[HistoricalPoint] = []
         for timestamp, row in frame.iterrows():
-            values = [row["Open"], row["High"], row["Low"], row["Close"]]
+            try:
+                values = [row["Open"], row["High"], row["Low"], row["Close"]]
+            except Exception:
+                continue
             if any(math.isnan(float(value)) for value in values):
                 continue
             dt = timestamp.to_pydatetime()
