@@ -64,7 +64,7 @@ deploying.
 - `GET /api/v1/market/status` — US market (no exchange picker)
 - `GET /api/v1/companies/{symbol}/profile`
 - `GET /api/v1/companies/{symbol}/news`
-- `GET /api/v1/companies/{symbol}/peers`
+- `GET /api/v1/companies/{symbol}/peers` — peer tickers with `symbol`, `logo`, and `name` when known
 - `GET /api/v1/companies/{symbol}/fundamentals`
 - `GET /api/v1/companies/{symbol}/earnings`
 - `GET /api/v1/companies/{symbol}/recommendations`
@@ -89,6 +89,8 @@ Daily charts default to deep history once warmed.
 ## WebSocket
 
 Open the interactive tester at `/api/ws-tester` (works behind your Nginx `/api` proxy).
+`/ws/live` accepts any supported platform symbol (stocks, crypto, forex), and with no
+`symbols` query it streams quote updates for the full symbol universe.
 
 Connect to all configured symbols:
 

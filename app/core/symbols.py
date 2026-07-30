@@ -297,6 +297,20 @@ def symbols_universe(asset_class: AssetClassQuery) -> tuple[CatalogEntry, ...]:
     )
 
 
+def all_platform_symbols() -> tuple[str, ...]:
+    """All public symbols supported by REST/WS across stocks, crypto, and forex."""
+    ordered = list(
+        dict.fromkeys(
+            [
+                *(symbol for symbol, _ in STOCK_CATALOG),
+                *(symbol for symbol, _ in CRYPTO_CATALOG),
+                *(symbol for symbol, _ in FOREX_CATALOG),
+            ]
+        )
+    )
+    return tuple(ordered)
+
+
 # Back-compat alias
 marketmap_universe = symbols_universe
 

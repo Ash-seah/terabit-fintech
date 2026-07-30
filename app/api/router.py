@@ -9,9 +9,11 @@ from pydantic import StringConstraints
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
+from app.core.logos import peer_card
 from app.core.symbols import (
     AssetClassQuery,
     DEFAULT_STOCK_EXCHANGE,
+    all_platform_symbols,
     normalize_symbol,
 )
 from app.providers.yahoo import HistoricalDataNotFoundError, HistoricalProviderError
@@ -355,13 +357,16 @@ async def company_news(
 
 @market_router.get("/companies/{symbol}/peers")
 async def company_peers(request: Request, symbol: Symbol) -> MarketPayload:
-    return await _market(
+    payload = await _market(
         request,
         "company-peers",
         "/stock/peers",
         {"symbol": normalize_symbol(symbol)},
         604_800,
     )
+    if isinstance(payload, list):
+        return [peer_card(str(peer)) for peer in payload if peer]
+    return payload
 
 
 @market_router.get("/companies/{symbol}/fundamentals")
@@ -462,10 +467,7 @@ async def websocket_tester() -> HTMLResponse:
 
 @router.websocket("/ws/live")
 async def live(websocket: WebSocket, symbols: str = "") -> None:
-    configured = frozenset(
-        getattr(websocket.app.state, "stream_symbols", None)
-        or websocket.app.state.settings.configured_stream_symbols
-    )
+    configured = frozenset(getattr(websocket.app.state, "ws_symbols", None) or all_platform_symbols())
     requested = frozenset(
         normalize_symbol(symbol) for symbol in symbols.split(",") if symbol.strip()
     )
@@ -535,13 +537,13 @@ _WS_TESTER_HTML = """<!doctype html>
   <main>
     <h1>Live WebSocket Tester</h1>
     <p>
-      Connects to <code>/ws/live</code>. Leave symbols empty for all curated streams
+      Connects to <code>/ws/live</code>. Leave symbols empty for all platform symbols
       (equities like <code>NVDA</code>, crypto like <code>BTC-USD</code>, FX like
       <code>EUR-USD</code>). Market map bulk data:
       <code>/api/v1/symbols?asset_class=stocks|crypto|forex</code>.
     </p>
     <div class="row">
-      <input id="symbols" placeholder="leave empty for all curated symbols" value="" />
+      <input id="symbols" placeholder="leave empty for all platform symbols" value="" />
       <button id="connect">Connect</button>
       <button id="disconnect" class="secondary">Disconnect</button>
     </div>

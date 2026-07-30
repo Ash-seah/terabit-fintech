@@ -13,6 +13,7 @@ from redis.exceptions import RedisError
 from app.api.router import router
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
+from app.core.symbols import all_platform_symbols
 from app.db.session import Database
 from app.providers.finnhub import (
     FinnhubClient,
@@ -96,12 +97,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.exception("Redis unavailable during startup; degraded mode enabled")
 
     stream_symbols = config.configured_stream_symbols
+    ws_symbols = all_platform_symbols()
     logger.info(
         "Subscribing live stream to %d symbols: %s",
         len(stream_symbols),
         ",".join(stream_symbols),
     )
     app.state.stream_symbols = stream_symbols
+    app.state.ws_symbols = ws_symbols
+    logger.info("WebSocket symbol universe: %d symbols", len(ws_symbols))
     streamer = FinnhubStreamer(
         config.finnhub_ws_url,
         config.finnhub_api_key.get_secret_value(),
@@ -117,7 +121,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         ),
         asyncio.create_task(
             quote_pulse_worker(
-                stream_symbols,
+                ws_symbols,
                 yahoo,
                 cache,
                 redis,

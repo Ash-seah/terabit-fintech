@@ -1,5 +1,5 @@
 from app.core.config import Settings
-from app.core.symbols import curated_stream_symbols, normalize_symbol
+from app.core.symbols import all_platform_symbols, curated_stream_symbols, normalize_symbol
 
 
 def test_stream_symbols_always_include_curated_universe() -> None:
@@ -22,3 +22,12 @@ def test_normalize_symbol_aliases() -> None:
     assert normalize_symbol("binance:btcusdt") == "BTC-USD"
     assert normalize_symbol("NVDA") == "NVDA"
     assert normalize_symbol("eurusd") == "EUR-USD"
+
+
+def test_all_platform_symbols_cover_full_universe() -> None:
+    symbols = set(all_platform_symbols())
+    assert len(symbols) >= 200
+    assert "AAPL" in symbols
+    assert "BTC-USD" in symbols
+    assert "USD-PLN" in symbols
+    assert "XAU-USD" in symbols
